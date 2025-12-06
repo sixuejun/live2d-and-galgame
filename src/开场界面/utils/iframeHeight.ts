@@ -9,33 +9,33 @@
  */
 function getContentHeight(): number {
   const interfaceElement = document.querySelector('.opening-interface') as HTMLElement;
-  
+
   if (interfaceElement) {
     // 基准高度：800px (3:2比例)
     const BASE_HEIGHT = 800;
-    
+
     // 获取容器尺寸（与index.ts中的逻辑一致）
     const containerWidth = window.innerWidth;
     const containerHeight = window.innerHeight;
-    
+
     // 计算缩放比例（与index.ts中的逻辑一致）
     const BASE_WIDTH = 1200;
     const padding = 20;
     const availableWidth = Math.max(containerWidth - padding * 2, 0);
     const availableHeight = Math.max(containerHeight - padding * 2, 0);
-    
+
     if (availableWidth > 0 && availableHeight > 0) {
       const scaleX = availableWidth / BASE_WIDTH;
       const scaleY = availableHeight / BASE_HEIGHT;
       const scale = Math.min(scaleX, scaleY, 1);
-      
+
       // 返回缩放后的实际高度，加上一些额外的空间以确保可以看到所有内容
       const scaledHeight = BASE_HEIGHT * scale;
       // 由于内容可能超出固定高度，使用更大的高度值
       return Math.max(400, Math.min(scaledHeight * 1.1, 2000)); // 增加10%的余量
     }
   }
-  
+
   // 降级方案：使用传统方法
   const body = document.body;
   const html = document.documentElement;
@@ -142,4 +142,3 @@ export function initAutoHeight() {
     adjustIframeHeight();
   }, 1000);
 }
-
