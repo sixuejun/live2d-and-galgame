@@ -932,9 +932,56 @@ async function extractModelNamesFromFiles(files: File[]): Promise<Set<string>> {
 }
 
 /**
- * 分类文件
+ * 智能识别动作/表情文件类型
  */
-function classifyFiles(files: File[], defaultModelName: string): Record<string, VirtualModelFiles> {
+function detectMotionType(filename: string): 'motion' | 'expression' {
+  const name = filename.toLowerCase();
+
+  // 表情标识
+  const expressionPatterns = [
+    /_e\./i, // _E.
+    /\.e\./i, // .E.
+    /expression/i, // expression
+    /表情/i, // 表情（中文）
+    /exp/i, // exp
+    /f\d+/i, // f01, f02 (常见表情命名)
+    /^expr/i, // expr开头
+  ];
+
+  // 动作标识
+  const motionPatterns = [
+    /_m\./i, // _M.
+    /\.m\./i, // .M.
+    /motion/i, // motion
+    /动作/i, // 动作（中文）
+    /mot/i, // mot
+    /idle/i, // idle（待机动作）
+    /tap/i, // tap（点击动作）
+    /touch/i, // touch
+  ];
+
+  // 优先检查表情标识（因为有些文件名可能同时包含motion）
+  for (const pattern of expressionPatterns) {
+    if (pattern.test(name)) {
+      return 'expression';
+    }
+  }
+
+  // 检查动作标识
+  for (const pattern of motionPatterns) {
+    if (pattern.test(name)) {
+      return 'motion';
+    }
+  }
+
+  // 默认返回动作
+  return 'motion';
+}
+
+/**
+ * 分类文件（导出供外部使用）
+ */
+export function classifyFiles(files: File[], defaultModelName: string): Record<string, VirtualModelFiles> {
   const modelFiles: Record<string, VirtualModelFiles> = {};
 
   for (const file of files) {
@@ -956,14 +1003,14 @@ function classifyFiles(files: File[], defaultModelName: string): Record<string, 
     } else if (filename.endsWith('.cdi3.json')) {
       modelFiles[modelName].cdi3 = { file, url };
     } else if (filename.endsWith('.motion3.json')) {
-      const isExpression = filename.includes('_e.') || /\d{3}_[^_]*_e\./i.test(filename);
+      const motionType = detectMotionType(file.name);
       const motionName = extractMotionNameFromFile(file.name);
 
       modelFiles[modelName].motions.push({
         file,
         url,
         name: motionName,
-        type: isExpression ? 'expression' : 'motion',
+        type: motionType,
       });
     }
   }
@@ -994,14 +1041,47 @@ function extractMotionNameFromFile(filename: string): string {
 
 /**
  * 为模型创建世界书条目
+ * 在角色卡绑定的世界书中创建条目（优先使用角色卡绑定的世界书）
  */
 export async function createWorldbookEntriesForModel(modelName: string, files: VirtualModelFiles) {
   try {
+    // 获取角色卡绑定的世界书
+    let targetWorldbookName: string | null = null;
+    try {
+      const charWorldbooks = getCharWorldbookNames('current');
+      // 优先使用 primary 世界书，如果没有则使用第一个 additional
+      targetWorldbookName = charWorldbooks.primary || charWorldbooks.additional[0] || null;
+    } catch (error) {
+      console.warn('获取角色卡世界书失败，使用默认世界书:', error);
+    }
+
+    // 如果没有角色卡世界书，使用默认世界书
+    if (!targetWorldbookName) {
+      targetWorldbookName = WORLDBOOK_NAME;
+    }
+
     // 确保世界书存在
     try {
-      await getWorldbook(WORLDBOOK_NAME);
+      await getWorldbook(targetWorldbookName);
     } catch {
-      await createWorldbook(WORLDBOOK_NAME, []);
+      // 如果世界书不存在，尝试创建
+      try {
+        await createWorldbook(targetWorldbookName, []);
+      } catch (createError) {
+        // 如果是角色卡世界书且创建失败，可能需要先绑定世界书
+        console.warn(`创建世界书 ${targetWorldbookName} 失败:`, createError);
+        // 回退到默认世界书
+        if (targetWorldbookName !== WORLDBOOK_NAME) {
+          targetWorldbookName = WORLDBOOK_NAME;
+          try {
+            await getWorldbook(WORLDBOOK_NAME);
+          } catch {
+            await createWorldbook(WORLDBOOK_NAME, []);
+          }
+        } else {
+          throw createError;
+        }
+      }
     }
 
     const entries: PartialDeep<WorldbookEntry>[] = [];
@@ -1013,8 +1093,8 @@ export async function createWorldbookEntriesForModel(modelName: string, files: V
     const motionsEntry = createMotionsEntry(modelName, files.motions);
     if (motionsEntry) entries.push(motionsEntry);
 
-    await createWorldbookEntries(WORLDBOOK_NAME, entries);
-    console.info(`已为模型 ${modelName} 创建世界书条目`);
+    await createWorldbookEntries(targetWorldbookName, entries);
+    console.info(`已为模型 ${modelName} 在世界书 ${targetWorldbookName} 中创建条目`);
   } catch (error) {
     console.error('创建世界书条目失败:', error);
     throw error;

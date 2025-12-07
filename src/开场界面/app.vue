@@ -60,77 +60,9 @@
         <p class="hint-text">选择一个开场，开启你的专属故事</p>
       </div>
 
-      <!-- 设置页面 -->
+      <!-- 设置页面（整合了上传向导） -->
       <div v-show="currentPage === 'settings'" class="page settings">
-        <PageHeader title="游戏设置" @back="showPage('main-menu')" />
-
-        <div class="settings-content">
-          <!-- URL导入 -->
-          <div class="settings-card">
-            <div class="settings-card-header">
-              <div class="settings-card-icon">
-                <IconLink />
-              </div>
-              <div>
-                <h3>URL 导入</h3>
-                <p class="desc">从网络地址导入模型文件（支持 GitHub 仓库，自动解析文件结构）</p>
-              </div>
-            </div>
-            <div class="url-input-group">
-              <input
-                v-model="urlInput"
-                type="url"
-                placeholder="输入模型 URL 或 GitHub 仓库地址，例如：https://sixuejun.github.io/live2d-models/chengbeiji/"
-                @keyup.enter="importFromUrl"
-              />
-              <button class="bubble-btn bubble-btn-sm" @click="importFromUrl">导入</button>
-            </div>
-          </div>
-
-          <!-- 本地文件导入 -->
-          <div class="settings-card">
-            <div class="settings-card-header">
-              <div class="settings-card-icon">
-                <IconUpload />
-              </div>
-              <div>
-                <h3>本地文件导入</h3>
-                <p class="desc">从本地选择模型文件</p>
-              </div>
-            </div>
-            <input
-              ref="fileInputRef"
-              type="file"
-              class="hidden-input"
-              accept=".png,.moc3,.model3.json,.cdi3.json,.motion3.json"
-              multiple
-              @change="handleFileSelect"
-            />
-            <button class="bubble-btn full-width-btn" @click="fileInputRef?.click()">
-              <IconUpload />
-              选择本地文件
-            </button>
-          </div>
-
-          <!-- 已导入配置列表 -->
-          <div v-if="importedModels.length > 0" class="settings-card">
-            <h3 style="margin-bottom: 16px; color: var(--foreground)">已导入的模型</h3>
-            <div class="config-list">
-              <div v-for="(model, index) in importedModels" :key="index" class="config-item">
-                <div class="config-item-left">
-                  <IconUpload class="icon-sm" />
-                  <span class="config-item-name">{{ model.name }}</span>
-                </div>
-                <div class="config-item-right">
-                  <IconCheck class="icon-sm check-icon" />
-                  <button class="remove-btn" @click="removeModel(index)">
-                    <IconClose class="icon-sm" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ModelUploadWizard @close="showPage('main-menu')" @complete="handleUploadComplete" />
       </div>
 
       <!-- 角色介绍页面 -->
@@ -176,25 +108,14 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue';
-import { createParticles, selectOpening, useCharacterDisplay, useModelImport, usePageNavigation } from './composables';
+import { createParticles, selectOpening, useCharacterDisplay, usePageNavigation } from './composables';
 import { DEFAULT_CHARACTERS, DEFAULT_OPENINGS } from './data';
 import type { Opening } from './types';
 import { adjustIframeHeight } from './utils/iframeHeight';
 
 // 组件
-import { PageHeader } from './components';
-import {
-  IconCheck,
-  IconChevronLeft,
-  IconChevronRight,
-  IconClose,
-  IconLink,
-  IconPlay,
-  IconSettings,
-  IconStar,
-  IconUpload,
-  IconUsers,
-} from './icons';
+import { ModelUploadWizard, PageHeader } from './components';
+import { IconChevronLeft, IconChevronRight, IconPlay, IconSettings, IconStar, IconUsers } from './icons';
 
 // ==================== 状态管理 ====================
 
@@ -214,17 +135,18 @@ const {
   goTo: goToCharacter,
 } = useCharacterDisplay(characters.value);
 
-// 模型导入
-const { importedModels, urlInput, importFromUrl, handleFileSelect, removeModel } = useModelImport();
-
 // DOM 引用
 const particlesRef = ref<HTMLElement>();
-const fileInputRef = ref<HTMLInputElement>();
 
 // ==================== 事件处理 ====================
 
 async function handleSelectOpening(opening: Opening) {
   await selectOpening(opening);
+}
+
+function handleUploadComplete() {
+  // 上传完成后可以保持在设置页面或返回主菜单
+  // 目前保持在设置页面，用户可以继续操作
 }
 
 // ==================== 生命周期 ====================
@@ -237,9 +159,14 @@ onMounted(() => {
   });
 });
 
-// 监听页面切换，调整高度
+// 监听页面切换，调整高度和缩放
 watch(currentPage, () => {
   nextTick(() => {
+    // 重新应用缩放（主菜单需要缩放，其他页面不需要）
+    const applyScaleFunc = (window as any).__applyScale;
+    if (applyScaleFunc) {
+      applyScaleFunc();
+    }
     adjustIframeHeight();
   });
 });

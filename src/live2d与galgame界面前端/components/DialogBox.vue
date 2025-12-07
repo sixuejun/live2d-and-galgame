@@ -98,17 +98,13 @@
         <div
           :class="['leading-relaxed', isNarration ? 'italic text-center' : '']"
           :style="{
-            color: props.isThrough
-              ? '#9ca3af'
-              : isNarration
-                ? dialogStyle.colors.narrationText
-                : dialogStyle.colors.dialogText,
+            color: isNarration ? dialogStyle.colors.narrationText : dialogStyle.colors.dialogText,
             fontSize: `${dialogStyle.fontSize}px`,
             paddingLeft: isInnerArrow ? '48px' : 0,
             paddingRight: isInnerArrow ? '48px' : 0,
           }"
         >
-          {{ displayedText }}
+          <span v-html="formatTextWithThoughts(displayedText)"></span>
           <span v-if="isTyping" class="animate-pulse ml-0.5">|</span>
         </div>
 
@@ -353,6 +349,9 @@ const indicatorComponent = computed((): VNode | null => {
 
   if (type === 'none') return null;
 
+  // 只在流式加载时显示动画
+  const isStreaming = props.isLoading || false;
+
   if (type === 'dots') {
     return h(
       'div',
@@ -363,8 +362,8 @@ const indicatorComponent = computed((): VNode | null => {
           class: 'w-1.5 h-1.5 rounded-full transition-opacity duration-500',
           style: {
             backgroundColor: indicatorColor,
-            opacity: isTyping.value ? (i === 2 ? 1 : 0.4) : 0.6,
-            animation: isTyping.value && i === 2 ? 'pulse 1s ease-in-out infinite' : undefined,
+            opacity: isStreaming ? (i === 2 ? 1 : 0.4) : 0.6,
+            animation: isStreaming && i === 2 ? 'pulse 1s ease-in-out infinite' : undefined,
           },
         }),
       ),
@@ -383,9 +382,9 @@ const indicatorComponent = computed((): VNode | null => {
             width: '8px',
             height: '8px',
             backgroundColor: indicatorColor,
-            opacity: isTyping.value ? (i === 2 ? 1 : 0.3 + i * 0.15) : 0.5,
-            transform: `rotate(45deg) scale(${isTyping.value && i === 2 ? 1.1 : 0.9})`,
-            animation: isTyping.value && i === 2 ? 'diamondPulse 1.2s ease-in-out infinite' : undefined,
+            opacity: isStreaming ? (i === 2 ? 1 : 0.3 + i * 0.15) : 0.5,
+            transform: `rotate(45deg) scale(${isStreaming && i === 2 ? 1.1 : 0.9})`,
+            animation: isStreaming && i === 2 ? 'diamondPulse 1.2s ease-in-out infinite' : undefined,
             display: 'inline-block',
           },
         }),
@@ -400,14 +399,14 @@ const indicatorComponent = computed((): VNode | null => {
         style: {
           backgroundColor: indicatorColor,
           opacity: 0.4,
-          animation: isTyping.value ? 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite' : undefined,
+          animation: isStreaming ? 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite' : undefined,
         },
       }),
       h('span', {
         class: 'absolute inset-0 rounded-full',
         style: {
           backgroundColor: indicatorColor,
-          animation: isTyping.value ? 'pulse 2s ease-in-out infinite' : undefined,
+          animation: isStreaming ? 'pulse 2s ease-in-out infinite' : undefined,
         },
       }),
     ]);
@@ -420,7 +419,7 @@ const indicatorComponent = computed((): VNode | null => {
         class: 'w-4 h-4 transition-transform duration-300',
         style: {
           color: indicatorColor,
-          animation: isTyping.value ? 'arrowBounce 0.8s ease-in-out infinite' : undefined,
+          animation: isStreaming ? 'arrowBounce 0.8s ease-in-out infinite' : undefined,
         },
         fill: 'none',
         stroke: 'currentColor',
@@ -450,6 +449,20 @@ function handleNext() {
   if (!props.isLastDialogue) {
     props.onNext();
   }
+}
+
+// 格式化文本，处理 *星号包裹* 的内心想法
+function formatTextWithThoughts(text: string): string {
+  if (!text) return '';
+
+  // 将 *星号包裹* 的内容转换为斜体灰色（内心想法），左右稍微空出来一点
+  // 匹配 *内容* 格式（排除 *through* 标记）
+  return text.replace(/\*([^*]+)\*/g, (match, content) => {
+    // 如果是 *through* 标记，跳过
+    if (content.trim() === 'through') return match;
+    // 转换为内心想法格式（斜体灰色，左右留空）
+    return ` <span style="color: #9ca3af; font-style: italic;">${content}</span> `;
+  });
 }
 
 function clearTypingTimer() {

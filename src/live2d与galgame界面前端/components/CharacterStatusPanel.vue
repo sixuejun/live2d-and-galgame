@@ -85,7 +85,10 @@
           <!-- 小剧场标签页 -->
           <div v-if="activeTab === 'theater'" class="animate-in fade-in space-y-4 duration-200">
             <div class="theater-title">🌿 · 小剧场 · 🌿</div>
-            <div ref="theaterContainer" class="theater-bubbles-container"></div>
+            <div
+              ref="theaterContainer"
+              class="theater-bubbles-container overflow-y-auto max-h-[calc(85vh-200px)]"
+            ></div>
           </div>
         </div>
       </div>
@@ -276,25 +279,34 @@ function renderTheater() {
     const content = match[2]?.trim();
     if (!fullSpeaker || !content) return;
 
-    // 判断是否为主视角
-    // 参考状态栏的逻辑：判断是否为第一个角色主视角
-    // 如果fullSpeaker以主角色名开头，则认为是主视角（左侧）
-    const speakerName = fullSpeaker.split('（')[0].split('(')[0];
-    const isMain = speakerName === mainCharacterName || fullSpeaker.includes('你') || fullSpeaker.includes('我');
-    const bubbleSide = isMain ? 'left' : 'right';
+    // 判断是否为用户角色
+    // 用户角色：{{user}}、user、你 - 显示在右边
+    // 其他角色：显示在左边
+    const speakerName = fullSpeaker.split('（')[0].split('(')[0].trim();
+    const isUser =
+      speakerName === '{{user}}' ||
+      speakerName.toLowerCase() === 'user' ||
+      speakerName === '你' ||
+      fullSpeaker.includes('{{user}}') ||
+      fullSpeaker.toLowerCase().includes('user') ||
+      fullSpeaker.includes('你');
+
+    const bubbleSide = isUser ? 'right' : 'left'; // 用户在右边，其他角色在左边
 
     // 创建外层容器（含发言人名）
     const bubbleWrapper = document.createElement('div');
     bubbleWrapper.style.display = 'flex';
     bubbleWrapper.style.flexDirection = 'column';
-    bubbleWrapper.style.alignItems = isMain ? 'flex-start' : 'flex-end';
+    bubbleWrapper.style.marginBottom = '16px';
+    bubbleWrapper.style.alignItems = isUser ? 'flex-end' : 'flex-start';
 
-    // 发言人标签
+    // 发言人标签（气泡上方小字）
     const speakerLabel = document.createElement('div');
-    speakerLabel.textContent = fullSpeaker;
-    speakerLabel.style.fontSize = '0.85em';
+    speakerLabel.textContent = speakerName; // 只显示角色名，不包含括号内容
+    speakerLabel.style.fontSize = '0.75em';
     speakerLabel.style.color = '#788a82';
-    speakerLabel.style.margin = isMain ? '0 0 4px 8px' : '0 8px 4px 0';
+    speakerLabel.style.marginBottom = '4px';
+    speakerLabel.style.padding = '0 8px';
 
     // 对话气泡
     const bubble = document.createElement('div');
@@ -444,8 +456,16 @@ onMounted(() => {
 .theater-bubbles-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   padding: 0 5px;
+  overflow-y: auto;
+  /* 隐藏滚动条但保持滚动功能 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.theater-bubbles-container::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .bubble {

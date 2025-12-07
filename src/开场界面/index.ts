@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 import app from './app.vue';
 import './index.scss';
-import { initAutoHeight, adjustIframeHeight } from './utils/iframeHeight';
+import { adjustIframeHeight, initAutoHeight } from './utils/iframeHeight';
 
 /**
  * 计算并应用界面缩放比例
@@ -11,34 +11,48 @@ function applyScale() {
   const interfaceElement = document.querySelector('.opening-interface') as HTMLElement;
   if (!interfaceElement) return;
 
-  // 基准尺寸：1200px x 800px (3:2比例)
-  const BASE_WIDTH = 1200;
-  const BASE_HEIGHT = 800;
+  // 检查是否是主菜单页面
+  const mainMenu = interfaceElement.querySelector('.main-menu');
 
-  // 获取容器尺寸（使用视口尺寸，确保充分利用空间，减少四周空白）
-  const containerWidth = window.innerWidth;
-  const containerHeight = window.innerHeight;
+  if (mainMenu) {
+    // 主菜单：添加类名并应用固定尺寸和缩放
+    interfaceElement.classList.add('main-menu-active');
 
-  // 计算缩放比例：取宽度和高度比例中较小的，确保完整显示
-  // 减去一些padding，避免紧贴边缘，但不要限制最小值，允许缩小
-  const padding = 20;
-  const availableWidth = Math.max(containerWidth - padding * 2, 0);
-  const availableHeight = Math.max(containerHeight - padding * 2, 0);
+    // 基准尺寸：1200px x 800px (3:2比例)
+    const BASE_WIDTH = 1200;
+    const BASE_HEIGHT = 800;
 
-  // 确保不会除以0
-  if (availableWidth <= 0 || availableHeight <= 0) {
-    return;
+    // 获取容器尺寸（使用视口尺寸，确保充分利用空间，减少四周空白）
+    const containerWidth = window.innerWidth;
+    const containerHeight = window.innerHeight;
+
+    // 计算缩放比例：取宽度和高度比例中较小的，确保完整显示
+    // 减去一些padding，避免紧贴边缘，但不要限制最小值，允许缩小
+    const padding = 20;
+    const availableWidth = Math.max(containerWidth - padding * 2, 0);
+    const availableHeight = Math.max(containerHeight - padding * 2, 0);
+
+    // 确保不会除以0
+    if (availableWidth <= 0 || availableHeight <= 0) {
+      return;
+    }
+
+    const scaleX = availableWidth / BASE_WIDTH;
+    const scaleY = availableHeight / BASE_HEIGHT;
+    const scale = Math.min(scaleX, scaleY, 1); // 不超过1，不放大，但允许缩小到能完整显示
+
+    // 应用缩放，使用 top center 作为原点，避免上方被裁剪
+    interfaceElement.style.transform = `scale(${scale})`;
+    interfaceElement.style.transformOrigin = 'top center';
+
+    console.info(`[开场界面] 主菜单应用缩放比例: ${scale.toFixed(3)} (容器: ${containerWidth}x${containerHeight})`);
+  } else {
+    // 其他页面：移除类名和缩放，使用宽度适配
+    interfaceElement.classList.remove('main-menu-active');
+    interfaceElement.style.transform = '';
+    interfaceElement.style.transformOrigin = '';
+    console.info(`[开场界面] 其他页面，移除缩放限制`);
   }
-
-  const scaleX = availableWidth / BASE_WIDTH;
-  const scaleY = availableHeight / BASE_HEIGHT;
-  const scale = Math.min(scaleX, scaleY, 1); // 不超过1，不放大，但允许缩小到能完整显示
-
-  // 应用缩放，使用 top center 作为原点，避免上方被裁剪
-  interfaceElement.style.transform = `scale(${scale})`;
-  interfaceElement.style.transformOrigin = 'top center';
-
-  console.info(`[开场界面] 应用缩放比例: ${scale.toFixed(3)} (容器: ${containerWidth}x${containerHeight})`);
 }
 
 /**
@@ -114,6 +128,9 @@ $(() => {
     vueApp.mount('#app');
 
     console.info('[开场界面] Vue 应用挂载成功，初始化缩放和自适应高度...');
+
+    // 导出applyScale函数供Vue组件使用
+    (window as any).__applyScale = applyScale;
 
     // 等待Vue渲染完成后再初始化缩放
     setTimeout(() => {

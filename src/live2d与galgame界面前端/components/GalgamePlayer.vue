@@ -135,23 +135,23 @@
         <span class="text-sm">{{ isFullscreen ? '退出全屏' : '全屏' }}</span>
       </button>
 
-      <!-- 重演按钮 -->
+      <!-- 历史按钮 -->
       <button
         v-if="menuExpanded"
         class="bg-card/80 text-foreground animate-in fade-in slide-in-from-top-2 flex items-center gap-2 rounded-full p-2 pr-4 shadow-lg backdrop-blur-sm transition-colors duration-200 hover:bg-card"
         style="animation-delay: 50ms"
-        aria-label="重演"
-        @click="handleReplay"
+        aria-label="历史"
+        @click="handleHistory"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
           />
         </svg>
-        <span class="text-sm">重演</span>
+        <span class="text-sm">历史</span>
       </button>
     </div>
 
@@ -258,6 +258,98 @@
       :on-close="() => (showCharacterPanel = false)"
     />
 
+    <!-- 历史对话框 -->
+    <div
+      v-if="showHistoryDialog"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      @click.self="showHistoryDialog = false"
+    >
+      <div
+        class="bg-card/95 text-foreground relative max-h-[85vh] w-[90%] max-w-3xl rounded-lg shadow-2xl backdrop-blur-md"
+      >
+        <!-- 标题栏 -->
+        <div class="border-border/30 flex items-center justify-between border-b px-6 py-3">
+          <h2 class="text-lg font-medium">对话历史</h2>
+          <button
+            class="hover:bg-muted rounded-full p-1 transition-colors"
+            aria-label="关闭"
+            @click="showHistoryDialog = false"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 历史消息列表 -->
+        <div class="history-scroll-container max-h-[calc(85vh-100px)] overflow-y-auto px-6 py-2">
+          <div v-if="historyMessages.length === 0" class="text-muted-foreground py-12 text-center text-sm">
+            暂无历史消息
+          </div>
+          <template v-for="(msg, msgIndex) in historyMessages" :key="msg.id">
+            <template v-for="(item, itemIndex) in msg.items" :key="`${msg.id}-${itemIndex}`">
+              <div
+                class="history-message-item group relative cursor-pointer rounded px-3 py-2 transition-all"
+                @click="jumpToHistoryMessage(msg.id)"
+              >
+                <!-- 角色对话 -->
+                <div
+                  v-if="item.type === 'character' || item.type === 'user'"
+                  class="leading-relaxed"
+                  :style="{
+                    color: dialogStyle.colors.dialogText,
+                    fontSize: `${dialogStyle.fontSize}px`,
+                  }"
+                >
+                  <span class="font-medium">{{ item.character }}：</span>
+                  <span v-html="formatUserText(item.text)"></span>
+                </div>
+                <!-- 旁白 -->
+                <div
+                  v-else-if="item.type === 'narration'"
+                  class="ml-6 leading-relaxed italic"
+                  :style="{
+                    color: dialogStyle.colors.narrationText,
+                    fontSize: `${dialogStyle.fontSize}px`,
+                  }"
+                >
+                  {{ item.text }}
+                </div>
+                <!-- 黑屏文字 -->
+                <div
+                  v-else-if="item.type === 'blacktext'"
+                  class="ml-6 leading-relaxed italic opacity-70"
+                  :style="{
+                    color: dialogStyle.colors.narrationText,
+                    fontSize: `${dialogStyle.fontSize}px`,
+                  }"
+                >
+                  {{ item.text }}
+                </div>
+                <!-- 选项（以用户发言格式显示） -->
+                <div
+                  v-else-if="item.type === 'choice'"
+                  class="leading-relaxed"
+                  :style="{
+                    color: dialogStyle.colors.dialogText,
+                    fontSize: `${dialogStyle.fontSize}px`,
+                  }"
+                >
+                  <span class="font-medium">你：</span>
+                  <span>{{ item.text }}</span>
+                </div>
+                <!-- 分隔线（只在hover时显示） -->
+                <div
+                  v-if="itemIndex < msg.items.length - 1 || msgIndex < historyMessages.length - 1"
+                  class="bg-border/30 absolute right-3 bottom-0 left-3 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                ></div>
+              </div>
+            </template>
+          </template>
+        </div>
+      </div>
+    </div>
+
     <!-- 输入框（屏幕中央） -->
     <div
       v-if="showInputBox"
@@ -303,6 +395,7 @@
         <!-- 输入区域 -->
         <div class="flex items-center gap-3">
           <input
+            ref="inputRef"
             v-model="inputText"
             type="text"
             placeholder="输入你想说的话..."
@@ -349,7 +442,12 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
-import { hasMotionAndExpression, parseMessageBlocks, parseStatusBlock } from '../lib/messageParser';
+import {
+  hasMotionAndExpression,
+  loadWorldbookResources,
+  parseMessageBlocks,
+  parseStatusBlock,
+} from '../lib/messageParser';
 import type { ChoiceOption, DialogBoxStyle, DialogueItem } from '../types/galgame';
 import { defaultDialogStyle } from '../types/galgame';
 import CharacterSprite from './CharacterSprite.vue';
@@ -386,6 +484,7 @@ const showChoices = ref(false);
 const customModeEnabled = ref(false);
 const showInputBox = ref(false);
 const inputText = ref('');
+const inputRef = ref<HTMLInputElement | null>(null);
 
 // 流式界面状态
 const isStreaming = ref(false);
@@ -504,9 +603,16 @@ const containerStyle = computed(() => {
 // 背景图片
 const backgroundImage = computed(() => {
   const dialogue = currentDialogue.value;
-  // 优先使用scene作为背景
+  // 优先使用从世界书匹配到的场景图片URL
+  if (dialogue?.sceneImageUrl) {
+    return dialogue.sceneImageUrl;
+  }
+  // 其次使用scene（可能是URL或文本描述）
   if (dialogue?.scene) {
-    return dialogue.scene;
+    // 如果scene看起来像URL，直接使用
+    if (dialogue.scene.match(/^https?:\/\//) || dialogue.scene.match(/^\//)) {
+      return dialogue.scene;
+    }
   }
   // 否则使用默认背景
   return null;
@@ -556,62 +662,23 @@ async function loadDialoguesFromTavern() {
   try {
     const messages = getChatMessages('0-{{lastMessageId}}');
     const newDialogues: DialogueItem[] = [];
+    let lastScene: string | undefined; // 用于场景继承
 
     // 处理每条消息
     for (const msg of messages) {
       const messageText = msg.message || '';
 
-      // 解析消息块
-      const blocks = parseMessageBlocks(messageText);
+      // 解析消息块（传入上一行的场景用于继承）
+      const blocks = await parseMessageBlocks(messageText, lastScene);
 
-      // 解析StatusBlock
-      const statusBlock = parseStatusBlock(messageText);
-
-      // 如果没有解析到块，使用默认格式
+      // 如果没有解析到块，不显示该消息（它很可能不属于我们的剧情文本）
+      // StatusBlock 位于 <content> 之外，只用于状态栏显示，不创建对话项
       if (blocks.length === 0) {
-        // 检查是否有StatusBlock
-        if (statusBlock) {
-          // 如果有StatusBlock但没有其他块，创建一个narration类型的对话
-          newDialogues.push({
-            character: '',
-            text: '',
-            type: 'narration',
-            message_id: msg.message_id,
-            role: msg.role,
-            statusBlock,
-          });
-        } else {
-          // 默认格式
-          const dialogue: DialogueItem = {
-            character: msg.name || (msg.role === 'user' ? '你' : ''),
-            text: messageText,
-            message_id: msg.message_id,
-            role: msg.role,
-            isEditable: msg.role === 'user',
-            sprite:
-              msg.role === 'assistant' && msg.name
-                ? {
-                    type: live2dModels.value.some(m => m.name === msg.name) ? 'live2d' : 'image',
-                    imageUrl: msg.extra?.sprite_image || undefined,
-                  }
-                : undefined,
-          };
-
-          // 应用编辑（如果有）
-          const edit = userMessageEdits.value.get(msg.message_id);
-          if (edit) {
-            if (edit.deleted) {
-              dialogue.isDeleted = true;
-            } else if (edit.text !== undefined) {
-              dialogue.editedText = edit.text;
-              dialogue.text = edit.text;
-            }
-          }
-
-          newDialogues.push(dialogue);
-        }
         continue;
       }
+
+      // 解析StatusBlock（用于状态栏显示，不作为对话项）
+      const statusBlock = parseStatusBlock(messageText);
 
       // 收集新格式的选项块（[[choice||选项1||角色名||台词]]）
       const newFormatChoiceBlocks: Array<{
@@ -659,31 +726,45 @@ async function loadDialoguesFromTavern() {
             role: 'assistant',
             type: isCGMode ? 'cg' : undefined,
             scene: block.scene,
+            sceneImageUrl: block.sceneImageUrl, // 从世界书匹配到的背景图片URL
             motion: block.motion,
             expression: block.expression,
-            isThrough: block.isThrough,
+            // 不再设置 isThrough，因为只有*星号包裹*的部分应该是灰色，不是整行
             isCG: isCGMode,
-            cgImageUrl: isCGMode ? block.scene : undefined, // CG图片URL可以从scene中获取
+            cgImageUrl: isCGMode ? block.cgImageUrl || block.scene : undefined, // 优先使用从世界书匹配到的CG URL
             statusBlock,
             sprite: isCGMode
               ? { type: 'none' } // CG模式不显示立绘
               : {
                   type: live2dModels.value.some(m => m.name === block.character) ? 'live2d' : 'image',
-                  imageUrl: msg.extra?.sprite_image || undefined,
+                  imageUrl: block.spriteImageUrl || msg.extra?.sprite_image || undefined,
                 },
           };
 
+          // 更新场景（用于后续继承）
+          if (block.scene) {
+            lastScene = block.scene;
+          }
+
           newDialogues.push(dialogue);
         } else if (block.type === 'narration') {
-          newDialogues.push({
+          const dialogue: DialogueItem = {
             character: '',
             text: block.message || '',
             type: 'narration',
             message_id: msg.message_id,
             role: 'system',
             scene: block.scene,
+            sceneImageUrl: block.sceneImageUrl, // 从世界书匹配到的背景图片URL
             statusBlock,
-          });
+          };
+
+          // 更新场景（用于后续继承）
+          if (block.scene) {
+            lastScene = block.scene;
+          }
+
+          newDialogues.push(dialogue);
         } else if (block.type === 'blacktext') {
           newDialogues.push({
             character: '',
@@ -701,9 +782,16 @@ async function loadDialoguesFromTavern() {
             message_id: msg.message_id,
             role: 'user',
             scene: block.scene,
+            sceneImageUrl: block.sceneImageUrl, // 从世界书匹配到的背景图片URL
             isEditable: true,
+            // 不再设置 isThrough，因为只有*星号包裹*的部分应该是灰色，不是整行
             statusBlock,
           };
+
+          // 更新场景（用于后续继承）
+          if (block.scene) {
+            lastScene = block.scene;
+          }
 
           // 应用编辑（如果有）
           const edit = userMessageEdits.value.get(msg.message_id);
@@ -722,9 +810,10 @@ async function loadDialoguesFromTavern() {
         }
       }
 
-      // 处理选项块：优先处理新格式，如果没有新格式则处理旧格式
+      // 处理选项块：区分两种格式
       if (newFormatChoiceBlocks.length > 0) {
-        // 新格式：收集所有选项到一个 choice 对话中
+        // 格式1：带角色回复的选项（继续剧情演出）
+        // 收集所有选项到一个 choice 对话中
         newDialogues.push({
           character: '',
           text: '',
@@ -740,8 +829,8 @@ async function loadDialoguesFromTavern() {
           statusBlock,
         });
       } else if (oldFormatChoiceBlocks.length > 0) {
-        // 旧格式：[[choice||选项1||选项2||选项3]]（演出后的真选项框）
-        // 合并所有旧格式选项块
+        // 格式2：纯选项列表（触发AI生成）
+        // 合并所有选项块
         const allChoices: string[] = [];
         for (const choiceBlock of oldFormatChoiceBlocks) {
           allChoices.push(...choiceBlock.choices);
@@ -851,12 +940,64 @@ function loadTestDialogues() {
 // 加载 Live2D 模型配置
 async function loadLive2dModels() {
   try {
-    // 从角色卡变量读取
+    const modelsMap = new Map<string, any>();
+
+    // 1. 先从角色卡变量读取基础配置
     const variables = getVariables({ type: 'character' }) || {};
     if (variables?.live2d_models && Array.isArray(variables.live2d_models)) {
-      live2dModels.value = variables.live2d_models;
-      console.info(`加载了 ${live2dModels.value.length} 个 Live2D 模型配置`);
+      for (const model of variables.live2d_models) {
+        if (model.name) {
+          modelsMap.set(model.name, { ...model });
+        }
+      }
     }
+
+    // 2. 从世界书读取模型资源，合并 defaultAnimation 等配置
+    try {
+      const resources = await loadWorldbookResources();
+      for (const [modelName, modelData] of resources.models.entries()) {
+        const existingModel = modelsMap.get(modelName);
+        if (existingModel) {
+          // 合并 defaultAnimation 等配置
+          if (modelData.defaultAnimation) {
+            existingModel.defaultAnimation = modelData.defaultAnimation;
+          }
+          // 如果世界书中有更新的文件路径，也可以更新
+          if (modelData.files) {
+            // 更新文件路径（如果世界书中的路径更新）
+            if (modelData.files.model3) {
+              existingModel.modelPath = modelData.files.model3.split('/').pop() || existingModel.modelPath;
+              // 更新 basePath
+              const basePath = modelData.files.model3.substring(0, modelData.files.model3.lastIndexOf('/') + 1);
+              existingModel.basePath = basePath || existingModel.basePath;
+            }
+            if (modelData.files.textures) {
+              existingModel.textures = modelData.files.textures;
+            }
+          }
+          // 更新 motions 和 expressions（如果世界书中的更完整）
+          if (modelData.motions && modelData.motions.length > 0) {
+            existingModel.motions = modelData.motions.map(m => ({
+              group: m.group || 'idle',
+              name: m.name,
+              file: m.file,
+            }));
+          }
+          if (modelData.expressions && modelData.expressions.length > 0) {
+            existingModel.expressions = modelData.expressions.map(e => e.name || e.file);
+          }
+        } else {
+          // 如果角色卡变量中没有该模型，但世界书中有，创建基础配置
+          // 这种情况下通常不会发生，因为模型应该先在角色卡变量中定义
+          console.warn(`世界书中找到模型 ${modelName}，但角色卡变量中未找到对应配置`);
+        }
+      }
+    } catch (error) {
+      console.warn('从世界书加载模型资源失败:', error);
+    }
+
+    live2dModels.value = Array.from(modelsMap.values());
+    console.info(`加载了 ${live2dModels.value.length} 个 Live2D 模型配置（已合并世界书资源）`);
   } catch (error) {
     console.error('加载 Live2D 模型配置失败:', error);
   }
@@ -1085,6 +1226,20 @@ function handleClick() {
   }
 }
 
+/**
+ * 裁剪消息文本，在 </content> 标签之前停止
+ */
+function trimMessageBeforeContentTag(messageText: string): string {
+  // 查找 </content> 标签的位置
+  const contentEndIndex = messageText.indexOf('</content>');
+  if (contentEndIndex !== -1) {
+    // 如果在 </content> 之前，返回截取的内容（包含 </content>）
+    return messageText.substring(0, contentEndIndex + 10); // 10 是 '</content>' 的长度
+  }
+  // 如果没有找到 </content>，返回原文本
+  return messageText;
+}
+
 // 保存到正文但不发送（不刷新界面）
 async function handleSaveToStory(text: string) {
   try {
@@ -1097,8 +1252,11 @@ async function handleSaveToStory(text: string) {
       return;
     }
 
-    // 将文本添加到消息正文中
-    const newMessage = chat_message.message + '\n\n[[user||{{scene}}||' + text + ']]';
+    // 获取当前场景（从当前对话继承）
+    const currentScene = currentDialogue.value?.scene || '{{scene}}';
+
+    // 将文本添加到消息正文中（使用新格式，继承场景）
+    const newMessage = chat_message.message + '\n\n[[user||场景：' + currentScene + '||台词：' + text + ']]';
 
     // 使用 setChatMessages 更新消息（不刷新界面）
     await setChatMessages(
@@ -1205,7 +1363,7 @@ async function trimChoiceText(messageId: number, selectedText: string): Promise<
 }
 
 async function handleChoiceSelect(id: string, customText?: string) {
-  console.log('Selected:', id, customText);
+  console.info('选择选项:', id, customText);
 
   // 获取当前对话的消息ID
   const currentMessageId = currentDialogue.value?.message_id;
@@ -1266,8 +1424,35 @@ async function handleChoiceSelect(id: string, customText?: string) {
 
     // 3. 区分演出中和演出后的行为
     if (isAllDialoguesLoaded) {
-      // 演出后：真选项框，删除后续对话并触发 AI 回复
-      if (currentMessageId < lastMessageId) {
+      // 演出后：真选项框，裁剪当前消息并在 </content> 之前停止，然后删除后续对话并触发 AI 回复
+      if (currentMessageId !== undefined) {
+        try {
+          // 先裁剪当前消息文本（在 </content> 标签之前停止）
+          const messages = getChatMessages(currentMessageId);
+          if (messages.length > 0) {
+            const currentMessage = messages[0];
+            const originalText = currentMessage.message || '';
+            const trimmedText = trimMessageBeforeContentTag(originalText);
+
+            if (trimmedText !== originalText) {
+              await setChatMessages(
+                [
+                  {
+                    message_id: currentMessageId,
+                    message: trimmedText,
+                  },
+                ],
+                { refresh: 'none' },
+              );
+              console.info('已裁剪消息文本（在 </content> 标签之前停止）');
+            }
+          }
+        } catch (error) {
+          console.error('裁剪消息文本失败:', error);
+        }
+      }
+
+      if (currentMessageId !== undefined && currentMessageId < lastMessageId) {
         const messagesToDelete: number[] = [];
         for (let i = currentMessageId + 1; i <= lastMessageId; i++) {
           messagesToDelete.push(i);
@@ -1315,11 +1500,38 @@ async function handleChoiceSelect(id: string, customText?: string) {
         }
       });
     } else {
-      // 演出中：除了输入选项框外，不删除后续对话，不触发 AI 回复
-      // 如果是自定义输入选项，则删除后续对话并触发 AI 回复
+      // 演出中：带角色回复的选项（格式1）会继续剧情演出，不触发 AI 回复
+      // 如果是自定义输入选项，则裁剪当前消息并在 </content> 之前停止，然后删除后续对话并触发 AI 回复
       if (id === 'custom' && customText) {
-        // 自定义输入选项：删除后续对话并触发 AI 回复
-        if (currentMessageId < lastMessageId) {
+        // 自定义输入选项：先裁剪当前消息文本（在 </content> 标签之前停止）
+        if (currentMessageId !== undefined) {
+          try {
+            const messages = getChatMessages(currentMessageId);
+            if (messages.length > 0) {
+              const currentMessage = messages[0];
+              const originalText = currentMessage.message || '';
+              const trimmedText = trimMessageBeforeContentTag(originalText);
+
+              if (trimmedText !== originalText) {
+                await setChatMessages(
+                  [
+                    {
+                      message_id: currentMessageId,
+                      message: trimmedText,
+                    },
+                  ],
+                  { refresh: 'none' },
+                );
+                console.info('已裁剪消息文本（在 </content> 标签之前停止）');
+              }
+            }
+          } catch (error) {
+            console.error('裁剪消息文本失败:', error);
+          }
+        }
+
+        // 然后删除后续对话并触发 AI 回复
+        if (currentMessageId !== undefined && currentMessageId < lastMessageId) {
           const messagesToDelete: number[] = [];
           for (let i = currentMessageId + 1; i <= lastMessageId; i++) {
             messagesToDelete.push(i);
@@ -1410,42 +1622,163 @@ function handleStreamToken(text: string) {
   streamingText.value = text;
 }
 
-// 重演功能：重新解析当前消息并生成对应的剧情演出
-async function handleReplay() {
-  menuExpanded.value = false;
+// 历史功能：显示对话历史并允许快速跳转
+const showHistoryDialog = ref(false);
+const historyMessages = ref<
+  Array<{
+    id: number;
+    role: string;
+    items: Array<{
+      type: 'character' | 'user' | 'narration' | 'blacktext' | 'choice';
+      character?: string;
+      text: string;
+    }>;
+  }>
+>([]);
 
-  const currentMessageId = currentDialogue.value?.message_id;
-  if (currentMessageId === undefined) {
-    console.warn('当前对话没有消息ID，无法重演');
-    return;
-  }
+async function handleHistory() {
+  menuExpanded.value = false;
+  showHistoryDialog.value = true;
 
   try {
-    // 获取当前消息
-    const messages = getChatMessages(currentMessageId);
-    if (messages.length === 0) {
-      console.warn('未找到当前消息');
-      return;
+    // 获取所有消息
+    const lastMessageId = getLastMessageId();
+    const messages: Array<{
+      id: number;
+      role: string;
+      items: Array<{
+        type: 'character' | 'user' | 'narration' | 'blacktext' | 'choice';
+        character?: string;
+        text: string;
+      }>;
+    }> = [];
+
+    for (let i = 0; i <= lastMessageId; i++) {
+      try {
+        const chatMessages = getChatMessages(i);
+        if (chatMessages.length > 0) {
+          const msg = chatMessages[0];
+          const messageText = msg.message || '';
+
+          // 解析消息块
+          const blocks = await parseMessageBlocks(messageText);
+
+          const items: Array<{
+            type: 'character' | 'user' | 'narration' | 'blacktext' | 'choice';
+            character?: string;
+            text: string;
+          }> = [];
+
+          for (const block of blocks) {
+            if (block.type === 'character' && block.character && block.text) {
+              items.push({
+                type: 'character',
+                character: block.character,
+                text: block.text,
+              });
+            } else if (block.type === 'user') {
+              const userText = 'message' in block ? block.message : block.text;
+              if (userText) {
+                // 保留原始文本（包含 *through* 标记），用于格式化显示
+                items.push({
+                  type: 'user',
+                  character: '你',
+                  text: userText,
+                });
+              }
+            } else if (block.type === 'narration') {
+              const narrationText = 'message' in block ? block.message : block.text;
+              if (narrationText) {
+                items.push({
+                  type: 'narration',
+                  text: narrationText,
+                });
+              }
+            } else if (block.type === 'blacktext') {
+              const blackText = 'message' in block ? block.message : block.text;
+              if (blackText) {
+                items.push({
+                  type: 'blacktext',
+                  text: blackText,
+                });
+              }
+            } else if (block.type === 'choice' && (block.choiceText || block.text)) {
+              items.push({
+                type: 'choice',
+                text: block.choiceText || block.text || '',
+              });
+            }
+          }
+
+          // 如果没有解析到任何块，使用原始消息文本
+          if (items.length === 0) {
+            const cleanText = messageText
+              .replace(/\[\[[^\]]+\]\]/g, '')
+              .replace(/<[^>]+>/g, '')
+              .trim();
+            if (cleanText) {
+              items.push({
+                type: msg.role === 'user' ? 'user' : 'character',
+                character: msg.role === 'user' ? '你' : 'AI',
+                text: cleanText,
+              });
+            }
+          }
+
+          if (items.length > 0) {
+            messages.push({
+              id: i,
+              role: msg.role || 'user',
+              items,
+            });
+          }
+        }
+      } catch (error) {
+        // 忽略单个消息获取失败
+        console.warn(`获取消息 ${i} 失败:`, error);
+      }
     }
 
-    const message = messages[0];
-    if (message.role !== 'assistant') {
-      console.warn('只能重演AI消息');
-      return;
-    }
+    historyMessages.value = messages.reverse(); // 最新的在前
+    console.info(`已加载 ${historyMessages.value.length} 条历史消息`);
+  } catch (error) {
+    console.error('加载历史消息失败:', error);
+  }
+}
 
-    // 重新加载对话数据，触发重新解析
+// 格式化用户文本，处理 *星号包裹* 的内心想法
+function formatUserText(text: string): string {
+  if (!text) return '';
+
+  // 将 *星号包裹* 的内容转换为斜体灰色（内心想法），左右稍微空出来一点
+  // 匹配 *内容* 格式（排除 *through* 标记）
+  return text.replace(/\*([^*]+)\*/g, (match, content) => {
+    // 如果是 *through* 标记，跳过
+    if (content.trim() === 'through') return match;
+    // 转换为内心想法格式（斜体灰色，左右留空）
+    return ` <span style="color: #9ca3af; font-style: italic;">${content}</span> `;
+  });
+}
+
+// 跳转到指定的历史消息
+async function jumpToHistoryMessage(messageId: number) {
+  try {
+    // 关闭历史对话框
+    showHistoryDialog.value = false;
+
+    // 重新加载对话数据
     await loadDialoguesFromTavern();
 
-    // 确保当前对话索引正确
-    const dialogueIndex = dialogues.value.findIndex(d => d.message_id === currentMessageId);
+    // 找到对应的对话索引
+    const dialogueIndex = dialogues.value.findIndex(d => d.message_id === messageId);
     if (dialogueIndex >= 0) {
       currentDialogIndex.value = dialogueIndex;
+      console.info(`已跳转到消息 ${messageId}（索引 ${dialogueIndex}）`);
+    } else {
+      console.warn(`未找到消息 ${messageId} 对应的对话`);
     }
-
-    console.info('重演完成');
   } catch (error) {
-    console.error('重演时出错:', error);
+    console.error('跳转到历史消息失败:', error);
   }
 }
 
@@ -1481,8 +1814,7 @@ function handleInputClick() {
   characterMenuExpanded.value = false;
   // 聚焦输入框
   nextTick(() => {
-    const input = document.querySelector('.input-box input') as HTMLInputElement;
-    input?.focus();
+    inputRef.value?.focus();
   });
 }
 
@@ -1499,19 +1831,46 @@ async function handleSendInput() {
   const currentMessageId = currentDialogue.value?.message_id;
   const lastMessageId = getLastMessageId();
 
-  // 如果演出中（还有后续对话），先裁剪之后的剧情文本（删除当前消息之后的所有消息）
-  if (!isAllDialoguesLoaded && currentMessageId !== undefined && currentMessageId < lastMessageId) {
+  // 如果演出中（还有后续对话），先裁剪之后的剧情文本（在 </content> 标签之前停止）
+  if (!isAllDialoguesLoaded && currentMessageId !== undefined) {
     try {
-      const messagesToDelete: number[] = [];
-      for (let i = currentMessageId + 1; i <= lastMessageId; i++) {
-        messagesToDelete.push(i);
+      // 获取当前消息的完整文本
+      const messages = getChatMessages(currentMessageId);
+      if (messages.length > 0) {
+        const currentMessage = messages[0];
+        const originalText = currentMessage.message || '';
+
+        // 裁剪消息文本（在 </content> 标签之前停止）
+        const trimmedText = trimMessageBeforeContentTag(originalText);
+
+        // 如果有裁剪（文本发生变化），更新消息
+        if (trimmedText !== originalText) {
+          await setChatMessages(
+            [
+              {
+                message_id: currentMessageId,
+                message: trimmedText,
+              },
+            ],
+            { refresh: 'none' }, // 不刷新界面
+          );
+          console.info('已裁剪消息文本（在 </content> 标签之前停止）');
+        }
       }
-      if (messagesToDelete.length > 0) {
-        await deleteChatMessages(messagesToDelete, { refresh: 'all' });
-        console.info(`已删除 ${messagesToDelete.length} 条后续消息`);
+
+      // 删除当前消息之后的所有消息
+      if (currentMessageId < lastMessageId) {
+        const messagesToDelete: number[] = [];
+        for (let i = currentMessageId + 1; i <= lastMessageId; i++) {
+          messagesToDelete.push(i);
+        }
+        if (messagesToDelete.length > 0) {
+          await deleteChatMessages(messagesToDelete, { refresh: 'all' });
+          console.info(`已删除 ${messagesToDelete.length} 条后续消息`);
+        }
       }
     } catch (error) {
-      console.error('删除后续消息失败:', error);
+      console.error('裁剪和删除后续消息失败:', error);
     }
   }
 
@@ -1537,11 +1896,17 @@ async function handleSendInput() {
     // 在发送前应用所有编辑和删除操作
     await applyUserMessageEdits();
 
+    // 获取当前场景（从当前对话继承）
+    const currentScene = currentDialogue.value?.scene || '{{scene}}';
+
+    // 使用新格式格式化用户消息
+    const formattedMessage = `[[user||场景：${currentScene}||台词：${text}]]`;
+
     await createChatMessages(
       [
         {
           role: 'user',
-          message: text,
+          message: formattedMessage,
         },
       ],
       { refresh: 'all' }, // 刷新界面以触发 AI 回复
@@ -1655,37 +2020,9 @@ async function applyUserMessageEdits() {
         console.info('已应用删除（不刷新界面）:', messageId);
       } else if (edit.text) {
         // 编辑消息（不刷新界面）
-        const messages = getChatMessages(messageId);
-        if (messages.length > 0) {
-          const originalMessage = messages[0];
-          const messageText = originalMessage.message || '';
-          const blocks = parseMessageBlocks(messageText);
-
-          let newMessageText = messageText;
-          for (const block of blocks) {
-            if (block.type === 'user' && block.message) {
-              const oldBlock = `[[user||${block.scene || '{{scene}}'}||${block.message}]]`;
-              const newBlock = `[[user||${block.scene || '{{scene}}'}||${edit.text}]]`;
-              newMessageText = newMessageText.replace(oldBlock, newBlock);
-              break;
-            }
-          }
-
-          if (newMessageText === messageText) {
-            newMessageText = `[[user||{{scene}}||${edit.text}]]`;
-          }
-
-          await setChatMessages(
-            [
-              {
-                message_id: messageId,
-                message: newMessageText,
-              },
-            ],
-            { refresh: 'none' }, // 不刷新界面
-          );
-          console.info('已应用编辑（不刷新界面）:', messageId);
-        }
+        // 使用相同的逻辑同步编辑
+        await syncEditToMessage(messageId, edit.text);
+        console.info('已应用编辑（不刷新界面）:', messageId);
       }
     }
 
@@ -1705,20 +2042,71 @@ async function syncEditToMessage(messageId: number, newText: string) {
     if (messages.length > 0) {
       const originalMessage = messages[0];
       const messageText = originalMessage.message || '';
-      const blocks = parseMessageBlocks(messageText);
 
+      // 提取 <content> 标签中的内容
+      const contentMatch = messageText.match(/<content>([\s\S]*?)<\/content>/i);
+      const contentText = contentMatch ? contentMatch[1] : messageText;
+
+      // 匹配所有 [[user||...]] 格式的块（使用非贪婪匹配，确保能匹配到完整的块）
+      const userBlockRegex = /\[\[user\|\|([^\]]+)\]\]/g;
+      let match;
       let newMessageText = messageText;
-      for (const block of blocks) {
-        if (block.type === 'user' && block.message) {
-          const oldBlock = `[[user||${block.scene || '{{scene}}'}||${block.message}]]`;
-          const newBlock = `[[user||${block.scene || '{{scene}}'}||${newText}]]`;
-          newMessageText = newMessageText.replace(oldBlock, newBlock);
+      let foundMatch = false;
+
+      // 查找并替换第一个 user 块
+      while ((match = userBlockRegex.exec(contentText)) !== null) {
+        const content = match[1];
+        // 解析键值对
+        const kvPairs: Record<string, string> = {};
+        const parts = content
+          .split('||')
+          .map(p => p.trim())
+          .filter(p => p);
+        for (const part of parts) {
+          const kvMatch = part.match(/^([^：:]+)[：:]\s*(.+)$/);
+          if (kvMatch) {
+            const key = kvMatch[1].trim();
+            const value = kvMatch[2].trim();
+            if (key && value) {
+              kvPairs[key] = value;
+            }
+          }
+        }
+
+        // 如果找到了 user 块（有场景或台词字段），替换它
+        if (
+          kvPairs['场景'] ||
+          kvPairs['scene'] ||
+          kvPairs['台词'] ||
+          kvPairs['用户消息'] ||
+          kvPairs['消息'] ||
+          kvPairs['text']
+        ) {
+          const scene = kvPairs['场景'] || kvPairs['scene'] || '{{scene}}';
+          const oldBlock = match[0];
+          // 使用用户编辑后的文本（可能包含*星号包裹*和【】包裹的内容）
+          const newBlock = `[[user||场景：${scene}||台词：${newText}]]`;
+
+          // 如果在 <content> 标签内，需要替换 contentText 中的内容
+          if (contentMatch) {
+            const newContentText = contentText.replace(oldBlock, newBlock);
+            newMessageText = messageText.replace(contentMatch[0], `<content>${newContentText}</content>`);
+          } else {
+            newMessageText = messageText.replace(oldBlock, newBlock);
+          }
+          foundMatch = true;
           break;
         }
       }
 
-      if (newMessageText === messageText) {
-        newMessageText = `[[user||{{scene}}||${newText}]]`;
+      // 如果没有找到匹配的块，在 <content> 标签内添加新格式
+      if (!foundMatch) {
+        if (contentMatch) {
+          const newContentText = contentText + `\n[[user||场景：{{scene}}||台词：${newText}]]`;
+          newMessageText = messageText.replace(contentMatch[0], `<content>${newContentText}</content>`);
+        } else {
+          newMessageText = messageText + `\n[[user||场景：{{scene}}||台词：${newText}]]`;
+        }
       }
 
       await setChatMessages(
@@ -1730,7 +2118,7 @@ async function syncEditToMessage(messageId: number, newText: string) {
         ],
         { refresh: 'none' }, // 不刷新界面
       );
-      console.info('已同步编辑到楼层消息（不刷新界面）:', messageId);
+      console.info('已同步编辑到楼层消息（不刷新界面）:', messageId, newText);
     }
   } catch (error) {
     console.error('同步编辑到楼层消息失败:', error);
@@ -1738,4 +2126,24 @@ async function syncEditToMessage(messageId: number, newText: string) {
 }
 </script>
 
-<style scoped></style>
+<style scoped>
+/* 历史对话框滚动容器 - 隐藏滚动条但保持滚动功能 */
+.history-scroll-container {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.history-scroll-container::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* 历史消息项样式 */
+.history-message-item {
+  position: relative;
+  margin-bottom: 0;
+}
+
+.history-message-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+</style>

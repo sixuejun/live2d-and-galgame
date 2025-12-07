@@ -25,6 +25,12 @@ export interface Live2DModelConfig {
   pose?: string;
   /** 本地文件的 fileId 映射（仅用于 IndexedDB 存储的文件） */
   _fileIds?: Record<string, string>;
+  /** 默认动画配置（从世界书读取） */
+  defaultAnimation?: {
+    motion?: string;
+    expression?: string;
+    autoLoop?: boolean;
+  };
 }
 
 // 声明全局类型
@@ -86,8 +92,11 @@ export class Live2DRenderer {
   private app: any = null;
   private currentModel: any = null;
   private modelConfig: Live2DModelConfig | null = null;
-  private canvas: HTMLCanvasElement | null = null;
   private isInitialized = false;
+  private currentMotionGroup: string | null = null;
+  private currentMotionIndex: number = 0;
+  private isLoopingDefaultMotion = false; // 标记是否正在循环播放默认动作
+  private defaultMotionLoopTimer: ReturnType<typeof setInterval> | null = null; // 默认动作循环定时器
 
   /**
    * 初始化渲染器
@@ -95,18 +104,17 @@ export class Live2DRenderer {
   async init(canvas: HTMLCanvasElement): Promise<void> {
     if (this.isInitialized) return;
 
-    this.canvas = canvas;
-
     try {
       // 加载 Live2D 依赖
       await initLive2DDependencies();
 
       // 创建 PixiJS 应用
+      const canvasElement = canvas;
       this.app = new window.PIXI.Application({
-        view: canvas,
+        view: canvasElement,
         autoStart: true,
         backgroundAlpha: 0, // 透明背景
-        resizeTo: canvas.parentElement || canvas,
+        resizeTo: canvasElement.parentElement || canvasElement,
         antialias: true,
       });
 
@@ -289,11 +297,51 @@ export class Live2DRenderer {
       // 添加到舞台
       this.app.stage.addChild(model);
       this.currentModel = model;
+      this.modelConfig = config;
 
-      // 如果有动作，播放第一个空闲动作
-      if (config.motions && config.motions.length > 0) {
-        const defaultGroup = config.motions[0].group || '';
-        model.motion(defaultGroup || '', 0);
+      // 应用默认表情（如果设置了）
+      if (config.defaultAnimation?.expression && config.expressions) {
+        const expressionIndex = config.expressions.findIndex((e: string) => {
+          // expressions 是 string[]
+          return e === config.defaultAnimation?.expression || e === `${config.defaultAnimation?.expression}.exp3.json`;
+        });
+        if (expressionIndex !== undefined && expressionIndex >= 0) {
+          model.expression(expressionIndex);
+          console.info(`应用默认表情: ${config.defaultAnimation.expression}`);
+        }
+      }
+
+      // 如果设置了默认动作且需要自动循环，启动循环播放（使用IDLE优先级）
+      if (config.defaultAnimation?.motion && config.defaultAnimation?.autoLoop) {
+        this.startDefaultMotionLoop(config.defaultAnimation.motion);
+      } else if (config.defaultAnimation?.motion && !config.defaultAnimation?.autoLoop) {
+        // 如果设置了默认动作但不需要循环，只播放一次（使用NORMAL优先级）
+        const motionConfig = config.motions?.find((m: any) => {
+          const name = typeof m === 'string' ? m : m.name || m.file;
+          return name === config.defaultAnimation?.motion || name === `${config.defaultAnimation?.motion}.motion3.json`;
+        });
+        if (motionConfig) {
+          const group = typeof motionConfig === 'string' ? 'idle' : motionConfig.group || 'idle';
+          const normalizedGroup = group === 'default' ? 'idle' : group; // 支持'default'组
+          const groupMotions =
+            config.motions?.filter((m: any) => {
+              const mGroup = typeof m === 'string' ? 'idle' : m.group || 'idle';
+              const normalizedMGroup = mGroup === 'default' ? 'idle' : mGroup;
+              return normalizedMGroup === normalizedGroup || mGroup === group;
+            }) || [];
+          const motionIndex = groupMotions.findIndex((m: any) => {
+            const name = typeof m === 'string' ? m : m.name || m.file;
+            return (
+              name === config.defaultAnimation?.motion || name === `${config.defaultAnimation?.motion}.motion3.json`
+            );
+          });
+          if (motionIndex >= 0) {
+            // 使用 NORMAL 优先级播放（默认）
+            const MotionPriority = window.Live2DModel?.MotionPriority || { NORMAL: 2 };
+            model.motion(normalizedGroup, motionIndex, MotionPriority.NORMAL);
+            console.info(`播放默认动作（不循环）: ${config.defaultAnimation.motion}`);
+          }
+        }
       }
 
       console.info(`模型 "${config.name}" 加载成功`);
@@ -304,17 +352,266 @@ export class Live2DRenderer {
   }
 
   /**
-   * 播放动作
+   * 启动默认动作循环播放
+   * 使用 MotionPriority.IDLE 优先级，可以被 NORMAL 和 FORCE 优先级的动作打断
+   * 当其他动作完成后，如果默认动作循环仍在运行，会自动恢复播放
    */
-  playMotion(group: string, index: number): void {
+  private startDefaultMotionLoop(motionName: string): void {
+    // 停止之前的循环
+    this.stopDefaultMotionLoop();
+
+    if (!this.currentModel || !this.modelConfig) {
+      return;
+    }
+
+    // 获取 MotionPriority 枚举
+    const MotionPriority = window.Live2DModel?.MotionPriority || {
+      NONE: 0,
+      IDLE: 1,
+      NORMAL: 2,
+      FORCE: 3,
+    };
+
+    // 查找默认动作
+    const motionConfig = this.modelConfig.motions?.find((m: any) => {
+      const name = typeof m === 'string' ? m : m.name || m.file;
+      return name === motionName || name === `${motionName}.motion3.json`;
+    });
+
+    if (!motionConfig) {
+      console.warn(`未找到默认动作: ${motionName}`);
+      return;
+    }
+
+    const group = typeof motionConfig === 'string' ? 'idle' : motionConfig.group || 'idle';
+    // 如果group是'default'，转换为'idle'（因为pixi-live2d-display通常使用'idle'作为默认组）
+    const normalizedGroup = group === 'default' ? 'idle' : group;
+
+    // 查找该组中所有动作的索引（支持'default'组）
+    const groupMotions =
+      this.modelConfig.motions?.filter((m: any) => {
+        const mGroup = typeof m === 'string' ? 'idle' : m.group || 'idle';
+        const normalizedMGroup = mGroup === 'default' ? 'idle' : mGroup;
+        return normalizedMGroup === normalizedGroup || mGroup === group; // 同时匹配标准化和原始组名
+      }) || [];
+
+    if (groupMotions.length === 0) {
+      console.warn(`动作组 ${group} 中没有找到动作`);
+      return;
+    }
+
+    // 找到当前动作在组中的索引
+    const motionIndex = groupMotions.findIndex((m: any) => {
+      const name = typeof m === 'string' ? m : m.name || m.file;
+      return name === motionName || name === `${motionName}.motion3.json`;
+    });
+
+    if (motionIndex === -1) {
+      console.warn(`在动作组 ${group} 中未找到动作 ${motionName}`);
+      return;
+    }
+
+    this.currentMotionGroup = normalizedGroup;
+    this.currentMotionIndex = motionIndex;
+    this.isLoopingDefaultMotion = true;
+
+    // 播放默认动作循环
+    const playDefaultMotionLoop = async () => {
+      if (!this.isLoopingDefaultMotion || !this.currentModel || this.currentMotionGroup === null) {
+        return;
+      }
+
+      try {
+        // 检查是否有更高优先级的动作正在播放
+        const motionManager = this.currentModel.motionManager;
+        if (motionManager && motionManager.state) {
+          const state = motionManager.state;
+          // 如果当前有 NORMAL 或 FORCE 优先级的动作正在播放，等待它完成
+          if (state.currentPriority === MotionPriority.NORMAL || state.currentPriority === MotionPriority.FORCE) {
+            // 使用定时器等待更高优先级的动作完成
+            const waitInterval = setInterval(() => {
+              if (!this.isLoopingDefaultMotion || !this.currentModel || this.currentMotionGroup === null) {
+                clearInterval(waitInterval);
+                return;
+              }
+
+              const currentState = this.currentModel.motionManager?.state;
+              if (
+                !currentState ||
+                (currentState.currentPriority !== MotionPriority.NORMAL &&
+                  currentState.currentPriority !== MotionPriority.FORCE)
+              ) {
+                // 更高优先级的动作已完成或被停止，可以播放默认动作了
+                clearInterval(waitInterval);
+                playDefaultMotionLoop();
+              }
+            }, 100); // 每100ms检查一次
+
+            return;
+          }
+        }
+
+        // 使用 IDLE 优先级播放默认动作
+        // IDLE 优先级较低，可以被 NORMAL 和 FORCE 优先级的动作打断
+        const success = await this.currentModel.motion(
+          this.currentMotionGroup,
+          this.currentMotionIndex,
+          MotionPriority.IDLE,
+        );
+
+        if (!success) {
+          console.warn(`播放默认动作失败: ${motionName}`);
+          // 延迟后重试
+          setTimeout(() => {
+            if (this.isLoopingDefaultMotion && this.currentModel && this.currentMotionGroup !== null) {
+              playDefaultMotionLoop();
+            }
+          }, 2000);
+          return;
+        }
+
+        console.info(
+          `播放默认动作（IDLE优先级）: ${motionName} (组=${this.currentMotionGroup}, 索引=${this.currentMotionIndex})`,
+        );
+
+        // 使用定时器定期检查动作状态，判断是否完成
+        // 默认动作通常持续 2-4 秒，我们每100ms检查一次状态
+        let checkCount = 0;
+        const maxChecks = 50; // 最多检查5秒（50 * 100ms）
+
+        const checkInterval = setInterval(() => {
+          checkCount++;
+          if (!this.isLoopingDefaultMotion || !this.currentModel || this.currentMotionGroup === null) {
+            clearInterval(checkInterval);
+            return;
+          }
+
+          try {
+            const motionManager = this.currentModel.motionManager;
+            if (motionManager && motionManager.state) {
+              const state = motionManager.state;
+
+              // 检查当前动作状态
+              const isOurDefaultMotion =
+                state.currentGroup === this.currentMotionGroup &&
+                state.currentIndex === this.currentMotionIndex &&
+                state.currentPriority === MotionPriority.IDLE;
+
+              if (isOurDefaultMotion) {
+                // 仍然是我们的默认动作在播放，继续等待
+                if (checkCount >= maxChecks) {
+                  // 超时，假设动作已完成，继续下一个循环
+                  clearInterval(checkInterval);
+                  playDefaultMotionLoop();
+                }
+                return;
+              } else {
+                // 动作已完成或被其他动作打断
+                clearInterval(checkInterval);
+
+                // 如果是被更高优先级的动作打断，等待它完成后再继续
+                if (state.currentPriority === MotionPriority.NORMAL || state.currentPriority === MotionPriority.FORCE) {
+                  // 等待更高优先级的动作完成（使用另一个定时器）
+                  const waitHighPriority = setInterval(() => {
+                    if (!this.isLoopingDefaultMotion || !this.currentModel || this.currentMotionGroup === null) {
+                      clearInterval(waitHighPriority);
+                      return;
+                    }
+
+                    const currentState = this.currentModel.motionManager?.state;
+                    if (
+                      !currentState ||
+                      (currentState.currentPriority !== MotionPriority.NORMAL &&
+                        currentState.currentPriority !== MotionPriority.FORCE)
+                    ) {
+                      // 更高优先级的动作已完成，继续播放默认动作
+                      clearInterval(waitHighPriority);
+                      playDefaultMotionLoop();
+                    }
+                  }, 100);
+                } else {
+                  // 动作已完成，继续播放下一个循环
+                  playDefaultMotionLoop();
+                }
+              }
+            }
+
+            // 如果没有 MotionManager，使用固定延时
+            if (checkCount >= 30) {
+              // 3秒后假设动作完成
+              clearInterval(checkInterval);
+              playDefaultMotionLoop();
+            }
+          } catch (error) {
+            console.warn('检查动作状态失败:', error);
+            clearInterval(checkInterval);
+            // 出错时使用延时等待后继续
+            setTimeout(() => {
+              if (this.isLoopingDefaultMotion && this.currentModel && this.currentMotionGroup !== null) {
+                playDefaultMotionLoop();
+              }
+            }, 3000);
+          }
+        }, 100); // 每100ms检查一次
+
+        // 记录定时器，以便在停止循环时清理
+        this.defaultMotionLoopTimer = checkInterval as any;
+      } catch (error) {
+        console.warn('循环播放默认动作失败:', error);
+        this.stopDefaultMotionLoop();
+      }
+    };
+
+    // 立即播放第一次
+    playDefaultMotionLoop();
+    console.info(`开始循环播放默认动作: ${motionName} (组=${normalizedGroup}, 索引=${motionIndex}, 优先级=IDLE)`);
+  }
+
+  /**
+   * 停止默认动作循环播放
+   */
+  private stopDefaultMotionLoop(): void {
+    // 设置标志，停止循环
+    this.isLoopingDefaultMotion = false;
+    this.currentMotionGroup = null;
+    this.currentMotionIndex = 0;
+
+    // 清除定时器（如果有）
+    if (this.defaultMotionLoopTimer) {
+      clearInterval(this.defaultMotionLoopTimer);
+      this.defaultMotionLoopTimer = null;
+    }
+  }
+
+  /**
+   * 播放动作
+   * 使用 NORMAL 优先级，可以打断 IDLE 优先级的默认动作
+   * 当动作完成后，如果默认动作循环仍在运行，会自动恢复播放
+   */
+  playMotion(group: string, index: number, priority?: number): void {
     if (!this.currentModel) {
       console.warn('没有加载的模型');
       return;
     }
 
     try {
-      this.currentModel.motion(group || '', index);
-      console.info(`播放动作: 组="${group}", 索引=${index}`);
+      // 获取 MotionPriority 枚举
+      const MotionPriority = window.Live2DModel?.MotionPriority || {
+        NONE: 0,
+        IDLE: 1,
+        NORMAL: 2,
+        FORCE: 3,
+      };
+
+      // 使用 NORMAL 优先级播放（默认），可以打断 IDLE 优先级的默认动作
+      // 不停止默认动作循环，这样动作完成后可以自动恢复默认动作
+      const motionPriority = priority !== undefined ? priority : MotionPriority.NORMAL;
+      this.currentModel.motion(group || '', index, motionPriority);
+      console.info(`播放动作: 组="${group}", 索引=${index}, 优先级=${motionPriority}`);
+
+      // 注意：pixi-live2d-display 会自动处理动作之间的层级和打断关系
+      // NORMAL 优先级的动作会打断 IDLE 优先级的默认动作
+      // 当 NORMAL 优先级的动作完成后，默认动作循环会自动恢复（如果还在运行）
     } catch (error) {
       console.error('播放动作失败:', error);
     }
@@ -374,6 +671,9 @@ export class Live2DRenderer {
    * 卸载模型
    */
   unloadModel(): void {
+    // 停止默认动作循环
+    this.stopDefaultMotionLoop();
+
     if (this.currentModel && this.app) {
       this.app.stage.removeChild(this.currentModel);
       this.currentModel.destroy();
@@ -386,6 +686,8 @@ export class Live2DRenderer {
    * 销毁渲染器
    */
   destroy(): void {
+    // 停止默认动作循环
+    this.stopDefaultMotionLoop();
     this.unloadModel();
 
     if (this.app) {

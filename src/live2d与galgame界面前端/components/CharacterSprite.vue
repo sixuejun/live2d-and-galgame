@@ -78,6 +78,8 @@ async function loadLive2dModel() {
     await live2dRenderer.loadModel(modelConfig);
 
     // 播放动作和表情
+    // 注意：如果模型配置中有 defaultAnimation，Live2DRenderer 已经会自动处理
+    // 只有当明确指定了动作时，才会播放指定动作（会打断默认动作循环）
     if (props.motion) {
       // 查找动作组和索引
       const motionConfig = modelConfig.motions?.find((m: any) => {
@@ -87,10 +89,24 @@ async function loadLive2dModel() {
 
       if (motionConfig) {
         const group = typeof motionConfig === 'string' ? 'idle' : motionConfig.group || 'idle';
-        const index = 0; // 默认播放第一个动作
-        live2dRenderer.playMotion(group, index);
+        const normalizedGroup = group === 'default' ? 'idle' : group; // 支持'default'组
+        // 查找该动作在组中的索引（支持'default'和'idle'组）
+        const groupMotions =
+          modelConfig.motions?.filter((m: any) => {
+            const mGroup = typeof m === 'string' ? 'idle' : m.group || 'idle';
+            const normalizedMGroup = mGroup === 'default' ? 'idle' : mGroup;
+            return normalizedMGroup === normalizedGroup || mGroup === group;
+          }) || [];
+        const index = groupMotions.findIndex((m: any) => {
+          const name = typeof m === 'string' ? m : m.name || m.file;
+          return name === props.motion || name === `${props.motion}.motion3.json`;
+        });
+        if (index >= 0) {
+          live2dRenderer.playMotion(normalizedGroup, index);
+        }
       }
     }
+    // 如果没有指定动作且模型有默认动作循环，Live2DRenderer 会自动循环播放
 
     if (props.expression) {
       // 查找表情索引
@@ -103,6 +119,7 @@ async function loadLive2dModel() {
         live2dRenderer.playExpression(expressionIndex);
       }
     }
+    // 如果没有指定表情但模型配置中有默认表情，Live2DRenderer 已经会自动应用
   } catch (error) {
     console.error('加载 Live2D 模型失败:', error);
   }

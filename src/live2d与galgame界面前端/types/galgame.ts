@@ -16,6 +16,7 @@ export interface DialogueItem {
   };
   // 新增字段
   scene?: string; // 场景
+  sceneImageUrl?: string; // 场景背景图片URL（从世界书匹配）
   motion?: string; // 动作
   expression?: string; // 表情
   isThrough?: boolean; // 是否为through消息（浅灰色斜体）
