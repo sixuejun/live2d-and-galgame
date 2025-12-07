@@ -5,4 +5,3 @@
     <line x1="12" y1="3" x2="12" y2="15"></line>
   </svg>
 </template>
-

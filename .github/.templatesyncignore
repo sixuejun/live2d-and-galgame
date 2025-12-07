@@ -1,4 +1,6 @@
 .github/workflows
 @types
 dist
+初始模板
+node_modules
 README.md

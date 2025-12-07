@@ -1,5 +1,10 @@
 <template>
-  <div ref="containerRef" class="relative w-full overflow-hidden select-none" :style="containerStyle" style="background: transparent;">
+  <div
+    ref="containerRef"
+    class="relative w-full overflow-hidden select-none"
+    :style="containerStyle"
+    style="background: transparent"
+  >
     <!-- 背景 -->
     <div
       class="absolute inset-0 bg-center bg-no-repeat"
@@ -452,7 +457,7 @@ const containerStyle = computed(() => {
     // 在全屏模式下，以屏幕高度作为容器宽度，保持16:9比例
     // 使用 width 和 aspect-ratio 来定义尺寸（符合iframe适配要求）
     const screenHeight = window.innerHeight; // 竖屏时的高度，旋转后作为宽度
-    
+
     return {
       width: `${screenHeight}px`,
       aspectRatio: '16 / 9',
@@ -462,7 +467,7 @@ const containerStyle = computed(() => {
       left: '50%',
       top: '50%',
       marginLeft: `-${screenHeight / 2}px`,
-      marginTop: `-${(screenHeight / targetAspectRatio) / 2}px`,
+      marginTop: `-${screenHeight / targetAspectRatio / 2}px`,
       background: 'transparent',
     };
   } else if (isPortrait) {
@@ -471,7 +476,7 @@ const containerStyle = computed(() => {
     // 计算缩放比例，确保横屏内容能完整显示在竖屏容器中
     const containerWidth = containerRef.value?.parentElement?.clientWidth || window.innerWidth;
     const containerHeight = containerRef.value?.parentElement?.clientHeight || window.innerHeight;
-    
+
     // 计算16:9比例所需的高度
     const requiredHeight = containerWidth / targetAspectRatio;
     // 如果所需高度超过容器高度，则缩放以适应容器
@@ -1146,7 +1151,10 @@ async function trimChoiceText(messageId: number, selectedText: string): Promise<
     // 收集所有选项块
     while ((match = choiceBlockRegex.exec(messageText)) !== null) {
       const choiceBlock = match[0];
-      const parts = match[1].split('||').map(c => c.trim()).filter(c => c);
+      const parts = match[1]
+        .split('||')
+        .map(c => c.trim())
+        .filter(c => c);
       allChoiceBlocks.push({ block: choiceBlock, parts });
     }
 
@@ -1217,7 +1225,7 @@ async function handleChoiceSelect(id: string, customText?: string) {
     // 确定要发送的文本和选项信息
     let messageText = '';
     let selectedOption: ChoiceOption | undefined;
-    
+
     if (id === 'custom' && customText) {
       // 自定义输入选项
       messageText = customText.trim();

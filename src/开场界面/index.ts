@@ -24,12 +24,12 @@ function applyScale() {
   const padding = 20;
   const availableWidth = Math.max(containerWidth - padding * 2, 0);
   const availableHeight = Math.max(containerHeight - padding * 2, 0);
-  
+
   // 确保不会除以0
   if (availableWidth <= 0 || availableHeight <= 0) {
     return;
   }
-  
+
   const scaleX = availableWidth / BASE_WIDTH;
   const scaleY = availableHeight / BASE_HEIGHT;
   const scale = Math.min(scaleX, scaleY, 1); // 不超过1，不放大，但允许缩小到能完整显示
@@ -58,7 +58,7 @@ function initScale() {
       adjustIframeHeight();
     }, 100);
   };
-  
+
   window.addEventListener('resize', handleResize);
 
   // 使用 ResizeObserver 监听容器大小变化（更精确）
@@ -69,7 +69,7 @@ function initScale() {
       adjustIframeHeight();
     });
     observer.observe(container);
-    
+
     // 也监听界面元素本身的变化（Vue更新时）
     const interfaceElement = document.querySelector('.opening-interface');
     if (interfaceElement) {
@@ -82,17 +82,17 @@ function initScale() {
     applyScale();
     adjustIframeHeight();
   }, 100);
-  
+
   setTimeout(() => {
     applyScale();
     adjustIframeHeight();
   }, 300);
-  
+
   setTimeout(() => {
     applyScale();
     adjustIframeHeight();
   }, 500);
-  
+
   setTimeout(() => {
     applyScale();
     adjustIframeHeight();
