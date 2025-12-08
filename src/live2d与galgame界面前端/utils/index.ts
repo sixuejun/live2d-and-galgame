@@ -16,10 +16,4 @@ export {
 } from './indexedDB';
 
 // 消息解析工具函数
-export {
-  hasMotionAndExpression,
-  loadWorldbookResources,
-  parseMessageBlocks,
-  parseStatusBlock,
-} from './messageParser';
-
+export { hasMotionAndExpression, loadWorldbookResources, parseMessageBlocks, parseStatusBlock } from './messageParser';

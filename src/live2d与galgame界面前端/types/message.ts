@@ -33,4 +33,3 @@ export interface MessageBlock {
   motionFile?: string; // 动作文件
   expressionFile?: string; // 表情文件
 }
-
