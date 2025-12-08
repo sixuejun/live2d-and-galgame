@@ -330,84 +330,226 @@
       </div>
     </div>
 
-    <!-- 步骤4: 资源设置（折叠界面） -->
-    <div v-show="currentStep === 3" class="step-content">
-      <div class="resource-settings-wrapper">
-        <!-- 动画和表情设置 -->
-        <CollapsibleSection
+    <!-- 步骤4: 资源设置（列表界面） -->
+    <div v-show="currentStep === 3 && !resourceDetailPage" class="step-content">
+      <div class="resource-settings-list">
+        <!-- 动画和表情设置入口 -->
+        <button
           v-if="hasModelFiles && (motionCount > 0 || expressionCount > 0)"
-          title="动画和表情设置"
-          :badge="`${motionCount + expressionCount}`"
-          :default-expanded="true"
+          class="resource-entry-btn"
+          @click="openResourceDetail('animation')"
         >
-          <div class="animation-settings">
-            <div class="setting-item">
-              <label>默认表情</label>
-              <select v-model="defaultExpression" class="select-with-scroll">
-                <option value="none">无</option>
-                <option v-for="expr in expressionList" :key="expr.name" :value="expr.name">
-                  {{ expr.name }}
-                </option>
-              </select>
-            </div>
-            <div class="setting-item">
-              <label>默认动作（Idle）</label>
-              <select v-model="defaultMotion" class="select-with-scroll">
-                <option value="none">无</option>
-                <option v-for="motion in motionList" :key="motion.name" :value="motion.name">
-                  {{ motion.name }}
-                </option>
-              </select>
-            </div>
-            <div class="setting-item">
-              <label>
-                <input v-model="autoLoopDefaultMotion" type="checkbox" />
-                自动循环默认动作
-              </label>
-              <p class="hint">当没有检测到特定文本时，将自动循环播放默认动作</p>
-            </div>
+          <div class="resource-entry-icon">
+            <svg class="icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <div class="resource-entry-content">
+            <span class="resource-entry-title">动画和表情设置</span>
+            <span class="resource-entry-desc">{{ motionCount }} 个动作，{{ expressionCount }} 个表情</span>
+          </div>
+          <div class="resource-entry-badge">{{ motionCount + expressionCount }}</div>
+          <svg class="resource-entry-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
 
-            <!-- 文本到动作/表情映射 -->
-            <div class="text-mapping-section">
-              <div class="text-mapping-header">
-                <h4>文本映射</h4>
-                <p class="hint">当检测到特定文本时，自动播放对应的动作和表情（多个文本用分号分隔）</p>
-                <button class="bubble-btn bubble-btn-sm add-mapping-btn" @click="addMapping">
-                  <IconUpload class="icon-sm" />
-                  添加映射
-                </button>
-              </div>
-              <div class="mapping-list">
-                <div v-for="(mapping, index) in textMappings" :key="index" class="mapping-item">
-                  <div class="mapping-inputs">
-                    <div class="text-tags-input-wrapper">
-                      <input
-                        :value="mapping.text"
-                        type="text"
-                        placeholder="输入触发文本，多个用分号(;)分隔"
-                        class="mapping-text-input tags-input"
-                        @blur="handleTextMappingBlur(index, $event)"
-                        @keydown.enter="handleTextMappingEnter(index, $event)"
-                      />
-                      <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
-                        <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
-                          {{ tag }}
-                          <button class="tag-remove" @click="removeTextTag(index, tagIndex)">×</button>
-                        </span>
-                      </div>
+        <!-- 角色立绘设置入口 -->
+        <button
+          v-if="classifiedFiles.sprites.length > 0"
+          class="resource-entry-btn"
+          @click="openResourceDetail('sprite')"
+        >
+          <div class="resource-entry-icon">
+            <svg class="icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+          </div>
+          <div class="resource-entry-content">
+            <span class="resource-entry-title">角色立绘设置</span>
+            <span class="resource-entry-desc">配置立绘的文本映射</span>
+          </div>
+          <div class="resource-entry-badge">{{ classifiedFiles.sprites.length }}</div>
+          <svg class="resource-entry-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <!-- 背景设置入口 -->
+        <button
+          v-if="classifiedFiles.backgrounds.length > 0"
+          class="resource-entry-btn"
+          @click="openResourceDetail('background')"
+        >
+          <div class="resource-entry-icon">
+            <svg class="icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <div class="resource-entry-content">
+            <span class="resource-entry-title">背景设置</span>
+            <span class="resource-entry-desc">配置背景的文本映射</span>
+          </div>
+          <div class="resource-entry-badge">{{ classifiedFiles.backgrounds.length }}</div>
+          <svg class="resource-entry-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <!-- CG设置入口 -->
+        <button v-if="classifiedFiles.cgs.length > 0" class="resource-entry-btn" @click="openResourceDetail('cg')">
+          <div class="resource-entry-icon">
+            <svg class="icon-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <div class="resource-entry-content">
+            <span class="resource-entry-title">CG设置</span>
+            <span class="resource-entry-desc">配置CG的文本映射</span>
+          </div>
+          <div class="resource-entry-badge">{{ classifiedFiles.cgs.length }}</div>
+          <svg class="resource-entry-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <!-- 无可配置资源提示 -->
+        <div
+          v-if="
+            !(hasModelFiles && (motionCount > 0 || expressionCount > 0)) &&
+            classifiedFiles.sprites.length === 0 &&
+            classifiedFiles.backgrounds.length === 0 &&
+            classifiedFiles.cgs.length === 0
+          "
+          class="no-resources-hint"
+        >
+          <p>暂无可配置的资源</p>
+          <p class="hint">请在上一步中上传并分类文件</p>
+        </div>
+      </div>
+      <div class="step-actions">
+        <button class="bubble-btn" @click="prevStep">上一步</button>
+        <button class="bubble-btn bubble-btn-primary" @click="nextStep">下一步：完成</button>
+      </div>
+    </div>
+
+    <!-- 步骤4: 资源设置详情页面 -->
+    <div v-show="currentStep === 3 && resourceDetailPage" class="step-content resource-detail-page">
+      <!-- 详情页内容区域（可滚动，包含头部） -->
+      <div class="resource-detail-content">
+        <!-- 详情页头部（在可滚动区域内） -->
+        <div class="resource-detail-header">
+          <button class="back-btn" @click="closeResourceDetail">
+            <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            返回
+          </button>
+          <h3 class="resource-detail-title">{{ resourceDetailTitle }}</h3>
+        </div>
+        <!-- 动画和表情设置详情 -->
+        <div v-if="resourceDetailPage === 'animation'" class="animation-settings">
+          <div class="setting-item">
+            <label>默认表情</label>
+            <select v-model="defaultExpression" class="select-with-scroll">
+              <option value="none">无</option>
+              <option v-for="expr in expressionList" :key="expr.name" :value="expr.name">
+                {{ expr.name }}
+              </option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>默认动作（Idle）</label>
+            <select v-model="defaultMotion" class="select-with-scroll">
+              <option value="none">无</option>
+              <option v-for="motion in motionList" :key="motion.name" :value="motion.name">
+                {{ motion.name }}
+              </option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>
+              <input v-model="autoLoopDefaultMotion" type="checkbox" />
+              自动循环默认动作
+            </label>
+            <p class="hint">当没有检测到特定文本时，将自动循环播放默认动作</p>
+          </div>
+
+          <!-- 文本到动作/表情映射 -->
+          <div class="text-mapping-section">
+            <div class="text-mapping-header">
+              <h4>文本映射</h4>
+              <button class="bubble-btn bubble-btn-sm add-mapping-btn" @click="addMapping">
+                <IconUpload class="icon-sm" />
+                添加映射
+              </button>
+            </div>
+            <p class="hint">当检测到特定文本时，自动播放对应的动作和表情（多个文本用分号分隔）</p>
+            <div class="mapping-list">
+              <div v-for="(mapping, index) in textMappings" :key="index" class="mapping-item">
+                <div class="mapping-inputs-vertical">
+                  <div class="text-tags-input-wrapper">
+                    <label class="mapping-label">触发文本</label>
+                    <input
+                      :value="mapping.text"
+                      type="text"
+                      placeholder="输入触发文本，多个用分号(;)分隔"
+                      class="mapping-text-input tags-input"
+                      @blur="handleTextMappingBlur(index, $event)"
+                      @keydown.enter="handleTextMappingEnter(index, $event)"
+                    />
+                    <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
+                      <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
+                        {{ tag }}
+                        <button class="tag-remove" @click="removeTextTag(index, tagIndex)">×</button>
+                      </span>
                     </div>
-                    <select v-model="mapping.expression" class="mapping-select select-with-scroll">
-                      <option value="none">无表情</option>
-                      <option v-for="expr in expressionList" :key="expr.name" :value="expr.name">
-                        {{ expr.name }}
-                      </option>
-                    </select>
-                    <select v-model="mapping.motion" class="mapping-select select-with-scroll">
-                      <option value="none">无动作</option>
-                      <option v-for="motion in motionList" :key="motion.name" :value="motion.name">
-                        {{ motion.name }}
-                      </option>
-                    </select>
+                  </div>
+                  <div class="mapping-selects-row">
+                    <div class="mapping-select-item">
+                      <label class="mapping-label">表情</label>
+                      <select v-model="mapping.expression" class="mapping-select select-with-scroll">
+                        <option value="none">无表情</option>
+                        <option v-for="expr in expressionList" :key="expr.name" :value="expr.name">
+                          {{ expr.name }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="mapping-select-item">
+                      <label class="mapping-label">动作</label>
+                      <select v-model="mapping.motion" class="mapping-select select-with-scroll">
+                        <option value="none">无动作</option>
+                        <option v-for="motion in motionList" :key="motion.name" :value="motion.name">
+                          {{ motion.name }}
+                        </option>
+                      </select>
+                    </div>
                     <button class="remove-mapping-btn" title="删除" @click="removeMapping(index)">
                       <IconClose class="icon-sm" />
                     </button>
@@ -416,134 +558,135 @@
               </div>
             </div>
           </div>
-        </CollapsibleSection>
+        </div>
 
-        <!-- 角色立绘设置 -->
-        <CollapsibleSection
-          v-if="classifiedFiles.sprites.length > 0"
-          title="角色立绘设置"
-          :badge="classifiedFiles.sprites.length"
-        >
-          <div class="sprite-settings">
-            <div v-for="(sprite, index) in spriteResources" :key="index" class="sprite-item">
-              <div class="sprite-header">
-                <span class="sprite-name">{{ sprite.name }}</span>
-                <span v-if="sprite.characterName" class="character-name-badge">{{ sprite.characterName }}</span>
-                <button class="bubble-btn bubble-btn-sm add-mapping-btn-inline" @click="addSpriteMapping(index)">
-                  <IconUpload class="icon-sm" />
-                  添加映射
-                </button>
-              </div>
-              <div class="text-mapping-section compact">
-                <div class="mapping-list">
-                  <div v-for="(mapping, mapIndex) in sprite.textMappings || []" :key="mapIndex" class="mapping-item">
-                    <div class="mapping-inputs">
-                      <div class="text-tags-input-wrapper">
-                        <input
-                          :value="mapping.text"
-                          type="text"
-                          placeholder="输入触发文本，多个用分号(;)分隔"
-                          class="mapping-text-input tags-input"
-                          @blur="handleSpriteMappingBlur(index, mapIndex, $event)"
-                          @keydown.enter="handleSpriteMappingEnter(index, mapIndex, $event)"
-                        />
-                        <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
-                          <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
-                            {{ tag }}
-                            <button class="tag-remove" @click="removeSpriteTextTag(index, mapIndex, tagIndex)">
-                              ×
-                            </button>
-                          </span>
-                        </div>
+        <!-- 角色立绘设置详情 -->
+        <div v-if="resourceDetailPage === 'sprite'" class="sprite-settings">
+          <div v-for="(sprite, index) in spriteResources" :key="index" class="sprite-item">
+            <div class="sprite-header">
+              <span class="sprite-name">{{ sprite.name }}</span>
+              <span v-if="sprite.characterName" class="character-name-badge">{{ sprite.characterName }}</span>
+              <button class="bubble-btn bubble-btn-sm add-mapping-btn-inline" @click="addSpriteMapping(index)">
+                <IconUpload class="icon-sm" />
+                添加映射
+              </button>
+            </div>
+            <div class="text-mapping-section compact">
+              <div class="mapping-list">
+                <div v-for="(mapping, mapIndex) in sprite.textMappings || []" :key="mapIndex" class="mapping-item">
+                  <div class="mapping-inputs">
+                    <div class="text-tags-input-wrapper">
+                      <input
+                        :value="mapping.text"
+                        type="text"
+                        placeholder="输入触发文本，多个用分号(;)分隔"
+                        class="mapping-text-input tags-input"
+                        @blur="handleSpriteMappingBlur(index, mapIndex, $event)"
+                        @keydown.enter="handleSpriteMappingEnter(index, mapIndex, $event)"
+                      />
+                      <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
+                        <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
+                          {{ tag }}
+                          <button class="tag-remove" @click="removeSpriteTextTag(index, mapIndex, tagIndex)">×</button>
+                        </span>
                       </div>
-                      <button class="remove-mapping-btn" title="删除" @click="removeSpriteMapping(index, mapIndex)">
-                        <IconClose class="icon-sm" />
-                      </button>
                     </div>
+                    <button class="remove-mapping-btn" title="删除" @click="removeSpriteMapping(index, mapIndex)">
+                      <IconClose class="icon-sm" />
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </CollapsibleSection>
+        </div>
 
-        <!-- 背景设置 -->
-        <CollapsibleSection
-          v-if="classifiedFiles.backgrounds.length > 0"
-          title="背景设置"
-          :badge="classifiedFiles.backgrounds.length"
-        >
-          <div class="background-settings">
-            <div v-for="(bg, index) in backgroundResources" :key="index" class="background-item">
-              <div class="resource-header">
-                <span class="resource-name">{{ bg.name }}</span>
-                <button class="bubble-btn bubble-btn-sm add-mapping-btn-inline" @click="addBackgroundMapping(index)">
-                  <IconUpload class="icon-sm" />
-                  添加映射
-                </button>
-              </div>
-              <div class="text-mapping-section compact">
-                <div class="mapping-list">
-                  <div v-for="(mapping, mapIndex) in bg.textMappings || []" :key="mapIndex" class="mapping-item">
-                    <div class="mapping-inputs">
-                      <div class="text-tags-input-wrapper">
-                        <input
-                          :value="mapping.text"
-                          type="text"
-                          placeholder="输入触发文本，多个用分号(;)分隔"
-                          class="mapping-text-input tags-input"
-                          @blur="handleBackgroundMappingBlur(index, mapIndex, $event)"
-                          @keydown.enter="handleBackgroundMappingEnter(index, mapIndex, $event)"
-                        />
-                        <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
-                          <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
-                            {{ tag }}
-                            <button class="tag-remove" @click="removeBackgroundTextTag(index, mapIndex, tagIndex)">
-                              ×
-                            </button>
-                          </span>
-                        </div>
+        <!-- 背景设置详情 -->
+        <div v-if="resourceDetailPage === 'background'" class="background-settings">
+          <div v-for="(bg, index) in backgroundResources" :key="index" class="background-item">
+            <div class="resource-header">
+              <span class="resource-name">{{ bg.name }}</span>
+              <button class="bubble-btn bubble-btn-sm add-mapping-btn-inline" @click="addBackgroundMapping(index)">
+                <IconUpload class="icon-sm" />
+                添加映射
+              </button>
+            </div>
+            <div class="text-mapping-section compact">
+              <div class="mapping-list">
+                <div v-for="(mapping, mapIndex) in bg.textMappings || []" :key="mapIndex" class="mapping-item">
+                  <div class="mapping-inputs">
+                    <div class="text-tags-input-wrapper">
+                      <input
+                        :value="mapping.text"
+                        type="text"
+                        placeholder="输入触发文本，多个用分号(;)分隔"
+                        class="mapping-text-input tags-input"
+                        @blur="handleBackgroundMappingBlur(index, mapIndex, $event)"
+                        @keydown.enter="handleBackgroundMappingEnter(index, mapIndex, $event)"
+                      />
+                      <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
+                        <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
+                          {{ tag }}
+                          <button class="tag-remove" @click="removeBackgroundTextTag(index, mapIndex, tagIndex)">
+                            ×
+                          </button>
+                        </span>
                       </div>
-                      <button class="remove-mapping-btn" title="删除" @click="removeBackgroundMapping(index, mapIndex)">
-                        <IconClose class="icon-sm" />
-                      </button>
                     </div>
+                    <button class="remove-mapping-btn" title="删除" @click="removeBackgroundMapping(index, mapIndex)">
+                      <IconClose class="icon-sm" />
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </CollapsibleSection>
+        </div>
 
-        <!-- CG设置 -->
-        <CollapsibleSection v-if="classifiedFiles.cgs.length > 0" title="CG设置" :badge="classifiedFiles.cgs.length">
-          <div class="cg-settings">
-            <div v-for="(cg, index) in cgResources" :key="index" class="cg-item">
-              <div class="resource-header">
-                <span class="resource-name">{{ cg.name }}</span>
-              </div>
-              <div class="text-mapping-section">
-                <h4>文本映射</h4>
-                <div class="mapping-list">
-                  <div v-for="(mapping, mapIndex) in cg.textMappings || []" :key="mapIndex" class="mapping-item">
-                    <input v-model="mapping.text" type="text" placeholder="输入触发文本" class="mapping-text-input" />
+        <!-- CG设置详情 -->
+        <div v-if="resourceDetailPage === 'cg'" class="cg-settings">
+          <div v-for="(cg, index) in cgResources" :key="index" class="cg-item">
+            <div class="resource-header">
+              <span class="resource-name">{{ cg.name }}</span>
+              <button class="bubble-btn bubble-btn-sm add-mapping-btn-inline" @click="addCGMapping(index)">
+                <IconUpload class="icon-sm" />
+                添加映射
+              </button>
+            </div>
+            <div class="text-mapping-section compact">
+              <div class="mapping-list">
+                <div v-for="(mapping, mapIndex) in cg.textMappings || []" :key="mapIndex" class="mapping-item">
+                  <div class="mapping-inputs">
+                    <div class="text-tags-input-wrapper">
+                      <input
+                        :value="mapping.text"
+                        type="text"
+                        placeholder="输入触发文本，多个用分号(;)分隔"
+                        class="mapping-text-input tags-input"
+                        @blur="handleCGMappingBlur(index, mapIndex, $event)"
+                        @keydown.enter="handleCGMappingEnter(index, mapIndex, $event)"
+                      />
+                      <div v-if="mapping.textTags && mapping.textTags.length > 0" class="text-tags">
+                        <span v-for="(tag, tagIndex) in mapping.textTags" :key="tagIndex" class="text-tag">
+                          {{ tag }}
+                          <button class="tag-remove" @click="removeCGTextTag(index, mapIndex, tagIndex)">×</button>
+                        </span>
+                      </div>
+                    </div>
                     <button class="remove-mapping-btn" title="删除" @click="removeCGMapping(index, mapIndex)">
                       <IconClose class="icon-sm" />
                     </button>
                   </div>
                 </div>
-                <button class="bubble-btn bubble-btn-sm" @click="addCGMapping(index)">
-                  <IconUpload class="icon-sm" />
-                  添加映射
-                </button>
               </div>
             </div>
           </div>
-        </CollapsibleSection>
+        </div>
       </div>
+
+      <!-- 详情页底部操作 -->
       <div class="step-actions">
-        <button class="bubble-btn" @click="prevStep">上一步</button>
-        <button class="bubble-btn bubble-btn-primary" @click="nextStep">下一步：完成</button>
+        <button class="bubble-btn bubble-btn-primary" @click="closeResourceDetail">完成设置</button>
       </div>
     </div>
 
@@ -572,10 +715,13 @@
 </template>
 
 <script setup lang="ts">
+// 第三方库
 import toastr from 'toastr';
 import { computed, ref } from 'vue';
+
+// 项目内部
+import { IconCheck, IconClose, IconUpload } from '../assets/icons';
 import { MODEL_CONFIG_FILES, MODEL_PATHS, WORLDBOOK_NAME } from '../data';
-import { IconCheck, IconClose, IconUpload } from '../icons';
 import type { ImportedModel } from '../types';
 import { storeFile } from '../utils/indexedDB';
 import {
@@ -584,7 +730,7 @@ import {
   createModelResourceWorldbookEntry,
   createSpriteResourceWorldbookEntry,
 } from '../utils/worldbookFormat';
-import { CollapsibleSection, PageHeader } from './index';
+import PageHeader from './PageHeader.vue';
 
 const emit = defineEmits<{
   close: [];
@@ -601,6 +747,32 @@ const steps = [
 
 const currentStep = ref(0);
 const fileInputRef = ref<HTMLInputElement>();
+
+// 资源设置详情页面状态
+type ResourceDetailPage = 'animation' | 'sprite' | 'background' | 'cg' | null;
+const resourceDetailPage = ref<ResourceDetailPage>(null);
+const resourceDetailTitle = computed(() => {
+  switch (resourceDetailPage.value) {
+    case 'animation':
+      return '动画和表情设置';
+    case 'sprite':
+      return '角色立绘设置';
+    case 'background':
+      return '背景设置';
+    case 'cg':
+      return 'CG设置';
+    default:
+      return '';
+  }
+});
+
+function openResourceDetail(page: ResourceDetailPage) {
+  resourceDetailPage.value = page;
+}
+
+function closeResourceDetail() {
+  resourceDetailPage.value = null;
+}
 
 // 文件包装类型：用于区分本地文件和 URL 导入的文件
 interface FileWithSource {
@@ -846,7 +1018,8 @@ async function importFromUrl() {
     }
   } catch (error) {
     console.error('URL导入失败:', error);
-    toastr.error('URL导入失败，请检查网络连接和URL格式');
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    toastr.error(`URL导入失败: ${errorMessage}`);
   } finally {
     importingUrl.value = false;
   }
@@ -1491,7 +1664,7 @@ function handleTextMappingBlur(index: number, event: Event) {
   textMappings.value[index].textTags = tags;
 }
 
-function handleTextMappingEnter(index: number, event: KeyboardEvent) {
+function handleTextMappingEnter(_index: number, event: KeyboardEvent) {
   event.preventDefault();
   (event.target as HTMLInputElement).blur();
 }
@@ -1563,7 +1736,7 @@ function handleSpriteMappingBlur(spriteIndex: number, mappingIndex: number, even
   spriteResources.value[spriteIndex].textMappings![mappingIndex].textTags = tags;
 }
 
-function handleSpriteMappingEnter(spriteIndex: number, mappingIndex: number, event: KeyboardEvent) {
+function handleSpriteMappingEnter(_spriteIndex: number, _mappingIndex: number, event: KeyboardEvent) {
   event.preventDefault();
   (event.target as HTMLInputElement).blur();
 }
@@ -1597,7 +1770,7 @@ function handleBackgroundMappingBlur(bgIndex: number, mappingIndex: number, even
   backgroundResources.value[bgIndex].textMappings![mappingIndex].textTags = tags;
 }
 
-function handleBackgroundMappingEnter(bgIndex: number, mappingIndex: number, event: KeyboardEvent) {
+function handleBackgroundMappingEnter(_bgIndex: number, _mappingIndex: number, event: KeyboardEvent) {
   event.preventDefault();
   (event.target as HTMLInputElement).blur();
 }
@@ -1631,7 +1804,7 @@ function handleCGMappingBlur(cgIndex: number, mappingIndex: number, event: Event
   cgResources.value[cgIndex].textMappings![mappingIndex].textTags = tags;
 }
 
-function handleCGMappingEnter(cgIndex: number, mappingIndex: number, event: KeyboardEvent) {
+function handleCGMappingEnter(_cgIndex: number, _mappingIndex: number, event: KeyboardEvent) {
   event.preventDefault();
   (event.target as HTMLInputElement).blur();
 }
@@ -2736,8 +2909,8 @@ function extractMotionName(filename: string): string {
   display: none;
 }
 
-// 资源设置包装器
-.resource-settings-wrapper {
+// 资源设置列表
+.resource-settings-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2752,6 +2925,185 @@ function extractMotionName(filename: string): string {
   &::-webkit-scrollbar {
     display: none; // Chrome/Safari
   }
+}
+
+// 资源入口按钮
+.resource-entry-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  backdrop-filter: blur(10px);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.8);
+    border-color: var(--primary-color, #ec4899);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.resource-entry-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(236, 72, 153, 0.1);
+  border-radius: 12px;
+  color: var(--primary-color, #ec4899);
+  flex-shrink: 0;
+}
+
+.resource-entry-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resource-entry-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.resource-entry-desc {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.resource-entry-badge {
+  padding: 4px 12px;
+  background: var(--primary-color, #ec4899);
+  color: white;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.resource-entry-arrow {
+  width: 20px;
+  height: 20px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.no-resources-hint {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted-foreground);
+
+  p {
+    margin: 8px 0;
+  }
+}
+
+// 资源详情页面
+.resource-detail-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.resource-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 0 0;
+  min-height: 0; // 关键：允许内容滚动
+
+  // 隐藏滚动条但保持滚动功能
+  scrollbar-width: none; // Firefox
+  -ms-overflow-style: none; // IE/Edge
+
+  &::-webkit-scrollbar {
+    display: none; // Chrome/Safari
+  }
+}
+
+.resource-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  z-index: 10;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--foreground);
+  transition: all 0.2s;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
+}
+
+.resource-detail-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--foreground);
+}
+
+// 垂直布局的映射输入
+.mapping-inputs-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.mapping-selects-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.mapping-select-item {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mapping-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 // 动画设置

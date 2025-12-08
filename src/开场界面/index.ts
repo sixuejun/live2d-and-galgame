@@ -1,6 +1,6 @@
 import { createApp } from 'vue';
 import app from './app.vue';
-import './index.scss';
+import './assets/styles/index.scss';
 import { adjustIframeHeight, initAutoHeight } from './utils/iframeHeight';
 
 /**
@@ -74,6 +74,18 @@ function initScale() {
   };
 
   window.addEventListener('resize', handleResize);
+
+  // 清理函数
+  function cleanup() {
+    window.removeEventListener('resize', handleResize);
+    if (container && typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {});
+      observer.disconnect();
+    }
+  }
+
+  // 将清理函数暴露给全局，以便在卸载时调用
+  (window as any).__cleanupOpeningInterface = cleanup;
 
   // 使用 ResizeObserver 监听容器大小变化（更精确）
   const container = document.querySelector('.opening-interface-wrapper');
@@ -154,4 +166,13 @@ $(() => {
       `;
     }
   }
+});
+
+// 页面卸载时清理资源
+$(window).on('pagehide', () => {
+  // 清理事件监听器和资源
+  if ((window as any).__cleanupOpeningInterface) {
+    (window as any).__cleanupOpeningInterface();
+  }
+  console.info('[开场界面] 资源清理完成');
 });

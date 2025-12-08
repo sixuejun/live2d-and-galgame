@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import IconBack from '../icons/IconBack.vue';
+import IconBack from '../assets/icons/IconBack.vue';
 
 defineProps<{
   title: string;

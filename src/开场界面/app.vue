@@ -114,8 +114,8 @@ import type { Opening } from './types';
 import { adjustIframeHeight } from './utils/iframeHeight';
 
 // 组件
+import { IconChevronLeft, IconChevronRight, IconPlay, IconSettings, IconStar, IconUsers } from './assets/icons';
 import { ModelUploadWizard, PageHeader } from './components';
-import { IconChevronLeft, IconChevronRight, IconPlay, IconSettings, IconStar, IconUsers } from './icons';
 
 // ==================== 状态管理 ====================
 

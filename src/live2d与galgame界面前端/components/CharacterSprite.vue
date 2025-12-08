@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Live2DRenderer, type Live2DModelConfig } from '../Live2DRenderer';
+import { Live2DRenderer, type Live2DModelConfig } from '../lib/renderers/Live2DRenderer';
 
 interface Props {
   scale: number;

@@ -99,12 +99,12 @@
 <script setup lang="ts">
 import _ from 'lodash';
 import { nextTick, onMounted, ref, watch } from 'vue';
-import type { StatusBlockData } from '../lib/messageParser';
+import type { StatusBlockData } from '../types/message';
 
 interface Props {
   show: boolean;
   messageId?: number;
-  statusBlock?: StatusBlockData;
+  statusBlock?: StatusBlockData | null;
   onClose: () => void;
 }
 

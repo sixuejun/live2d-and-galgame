@@ -442,14 +442,14 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import type { ChoiceOption, DialogBoxStyle, DialogueItem } from '../types/galgame';
+import { defaultDialogStyle } from '../types/galgame';
 import {
   hasMotionAndExpression,
   loadWorldbookResources,
   parseMessageBlocks,
   parseStatusBlock,
-} from '../lib/messageParser';
-import type { ChoiceOption, DialogBoxStyle, DialogueItem } from '../types/galgame';
-import { defaultDialogStyle } from '../types/galgame';
+} from '../utils/messageParser';
 import CharacterSprite from './CharacterSprite.vue';
 import CharacterStatusPanel from './CharacterStatusPanel.vue';
 import ChoiceBox from './ChoiceBox.vue';
@@ -548,10 +548,10 @@ watch(
 // 遵循前端界面规则：使用 width 和 aspect-ratio，禁止使用 vh 等受宿主高度影响的单位
 const containerStyle = computed(() => {
   const isPortrait = window.innerHeight > window.innerWidth;
-  const isFullscreen = !!document.fullscreenElement;
+  const isFullscreenMode = !!document.fullscreenElement;
   const targetAspectRatio = 16 / 9;
 
-  if (isPortrait && isFullscreen) {
+  if (isPortrait && isFullscreenMode) {
     // 全屏且竖屏时，旋转90度显示横屏
     // 在全屏模式下，以屏幕高度作为容器宽度，保持16:9比例
     // 使用 width 和 aspect-ratio 来定义尺寸（符合iframe适配要求）
@@ -562,36 +562,17 @@ const containerStyle = computed(() => {
       aspectRatio: '16 / 9',
       transform: 'rotate(90deg)',
       transformOrigin: 'center center',
-      position: 'absolute',
+      position: 'absolute' as const,
       left: '50%',
       top: '50%',
       marginLeft: `-${screenHeight / 2}px`,
       marginTop: `-${screenHeight / targetAspectRatio / 2}px`,
       background: 'transparent',
     };
-  } else if (isPortrait) {
-    // 竖屏时等比例缩放，保持横屏比例
-    // 使用 width 和 aspect-ratio 来让高度根据宽度动态调整（符合前端界面规则）
-    // 计算缩放比例，确保横屏内容能完整显示在竖屏容器中
-    const containerWidth = containerRef.value?.parentElement?.clientWidth || window.innerWidth;
-    const containerHeight = containerRef.value?.parentElement?.clientHeight || window.innerHeight;
-
-    // 计算16:9比例所需的高度
-    const requiredHeight = containerWidth / targetAspectRatio;
-    // 如果所需高度超过容器高度，则缩放以适应容器
-    const scale = containerHeight >= requiredHeight ? 1 : containerHeight / requiredHeight;
-
-    return {
-      width: '100%',
-      aspectRatio: '16 / 9',
-      transform: `scale(${scale})`,
-      transformOrigin: 'center center',
-      margin: '0 auto',
-      background: 'transparent',
-    };
   }
 
-  // 横屏时正常显示（使用 width 和 aspect-ratio）
+  // 横屏或非全屏竖屏时正常显示（使用 width 和 aspect-ratio）
+  // 不需要额外的缩放计算，让 CSS 自动处理
   return {
     width: '100%',
     aspectRatio: '16 / 9',
@@ -1077,9 +1058,9 @@ async function toggleFullscreen() {
       // 如果是竖屏，请求横屏方向
       if (window.innerHeight > window.innerWidth) {
         // 尝试锁定屏幕方向（需要用户手势触发）
-        if (screen.orientation && screen.orientation.lock) {
+        if (screen.orientation && 'lock' in screen.orientation) {
           try {
-            await screen.orientation.lock('landscape');
+            await (screen.orientation as any).lock('landscape');
           } catch (e) {
             console.warn('无法锁定屏幕方向:', e);
           }
@@ -1091,9 +1072,9 @@ async function toggleFullscreen() {
       await document.exitFullscreen();
       isFullscreen.value = false;
       // 退出全屏时解锁屏幕方向
-      if (screen.orientation && screen.orientation.unlock) {
+      if (screen.orientation && 'unlock' in screen.orientation) {
         try {
-          await screen.orientation.unlock();
+          (screen.orientation as any).unlock();
         } catch (e) {
           // 忽略错误
         }
@@ -1117,13 +1098,8 @@ const handleFullscreenChange = () => {
 // 监听窗口大小变化，更新容器样式
 const handleResize = () => {
   // 触发响应式更新（containerStyle 是 computed，会自动更新）
-  // 使用 nextTick 确保 DOM 更新完成
   nextTick(() => {
-    // 强制触发 computed 重新计算
-    if (containerRef.value) {
-      // 通过访问 containerStyle 来触发重新计算
-      const _ = containerStyle.value;
-    }
+    // 强制触发重新渲染
   });
 };
 
@@ -1134,6 +1110,11 @@ onMounted(() => {
   document.addEventListener('fullscreenchange', handleFullscreenChange);
   window.addEventListener('resize', handleResize);
   window.addEventListener('orientationchange', handleResize);
+
+  // 初始化时强制触发一次尺寸更新，确保容器样式正确
+  nextTick(() => {
+    handleResize();
+  });
 
   // 加载数据
   loadLive2dModels();
@@ -1155,7 +1136,9 @@ onMounted(() => {
         streamingMessageId.value = null;
       }
     });
-    if (messageReceivedCleanup) eventCleanups.push(messageReceivedCleanup);
+    if (messageReceivedCleanup) {
+      eventCleanups.push(() => messageReceivedCleanup.stop());
+    }
 
     // 监听消息更新
     const messageUpdatedCleanup = eventOn(tavern_events.MESSAGE_UPDATED, async () => {
@@ -1170,7 +1153,9 @@ onMounted(() => {
         }
       }
     });
-    if (messageUpdatedCleanup) eventCleanups.push(messageUpdatedCleanup);
+    if (messageUpdatedCleanup) {
+      eventCleanups.push(() => messageUpdatedCleanup.stop());
+    }
 
     // 监听聊天切换
     const chatChangedCleanup = eventOn(tavern_events.CHAT_CHANGED, () => {
@@ -1180,13 +1165,17 @@ onMounted(() => {
       streamingText.value = '';
       streamingMessageId.value = null;
     });
-    if (chatChangedCleanup) eventCleanups.push(chatChangedCleanup);
+    if (chatChangedCleanup) {
+      eventCleanups.push(() => chatChangedCleanup.stop());
+    }
 
     // 监听流式token
     const streamTokenCleanup = eventOn(tavern_events.STREAM_TOKEN_RECEIVED, (text: string) => {
       handleStreamToken(text);
     });
-    if (streamTokenCleanup) eventCleanups.push(streamTokenCleanup);
+    if (streamTokenCleanup) {
+      eventCleanups.push(() => streamTokenCleanup.stop());
+    }
   }
 });
 
@@ -1499,90 +1488,90 @@ async function handleChoiceSelect(id: string, customText?: string) {
           }
         }
       });
-    } else {
-      // 演出中：带角色回复的选项（格式1）会继续剧情演出，不触发 AI 回复
-      // 如果是自定义输入选项，则裁剪当前消息并在 </content> 之前停止，然后删除后续对话并触发 AI 回复
-      if (id === 'custom' && customText) {
-        // 自定义输入选项：先裁剪当前消息文本（在 </content> 标签之前停止）
-        if (currentMessageId !== undefined) {
-          try {
-            const messages = getChatMessages(currentMessageId);
-            if (messages.length > 0) {
-              const currentMessage = messages[0];
-              const originalText = currentMessage.message || '';
-              const trimmedText = trimMessageBeforeContentTag(originalText);
+    }
 
-              if (trimmedText !== originalText) {
-                await setChatMessages(
-                  [
-                    {
-                      message_id: currentMessageId,
-                      message: trimmedText,
-                    },
-                  ],
-                  { refresh: 'none' },
-                );
-                console.info('已裁剪消息文本（在 </content> 标签之前停止）');
-              }
-            }
-          } catch (error) {
-            console.error('裁剪消息文本失败:', error);
-          }
-        }
+    // 演出中：带角色回复的选项（格式1）会继续剧情演出，不触发 AI 回复
+    // 如果是自定义输入选项，则裁剪当前消息并在 </content> 之前停止，然后删除后续对话并触发 AI 回复
+    if (!isAllDialoguesLoaded && id === 'custom' && customText) {
+      // 自定义输入选项：先裁剪当前消息文本（在 </content> 标签之前停止）
+      if (currentMessageId !== undefined) {
+        try {
+          const messages = getChatMessages(currentMessageId);
+          if (messages.length > 0) {
+            const currentMessage = messages[0];
+            const originalText = currentMessage.message || '';
+            const trimmedText = trimMessageBeforeContentTag(originalText);
 
-        // 然后删除后续对话并触发 AI 回复
-        if (currentMessageId !== undefined && currentMessageId < lastMessageId) {
-          const messagesToDelete: number[] = [];
-          for (let i = currentMessageId + 1; i <= lastMessageId; i++) {
-            messagesToDelete.push(i);
-          }
-          if (messagesToDelete.length > 0) {
-            await deleteChatMessages(messagesToDelete, { refresh: 'all' });
-            console.info(`已删除 ${messagesToDelete.length} 条后续消息`);
-          }
-        }
-
-        // 发送用户输入的消息
-        await createChatMessages(
-          [
-            {
-              role: 'user',
-              message: messageText,
-            },
-          ],
-          { refresh: 'all' },
-        );
-        console.info('已发送用户消息（自定义输入）:', messageText);
-
-        // 准备流式界面
-        const expectedMessageId = getLastMessageId() + 1;
-        isStreaming.value = true;
-        streamingText.value = '';
-        streamingMessageId.value = expectedMessageId;
-
-        // 触发 AI 生成回复
-        await triggerSlash('/trigger');
-        console.info('已触发 AI 生成（自定义输入）');
-
-        // 重新加载对话数据
-        await loadDialoguesFromTavern();
-
-        // 跳转到最新对话
-        nextTick(() => {
-          if (dialogues.value.length > 0) {
-            const newMessage = dialogues.value.find(d => d.message_id === expectedMessageId);
-            if (newMessage) {
-              currentDialogIndex.value = dialogues.value.indexOf(newMessage);
-            } else {
-              currentDialogIndex.value = dialogues.value.length - 1;
+            if (trimmedText !== originalText) {
+              await setChatMessages(
+                [
+                  {
+                    message_id: currentMessageId,
+                    message: trimmedText,
+                  },
+                ],
+                { refresh: 'none' },
+              );
+              console.info('已裁剪消息文本（在 </content> 标签之前停止）');
             }
           }
-        });
-      } else {
-        // 普通选项：只显示角色回复，不删除后续对话，不触发 AI 回复
-        // 继续下一条对话
-        nextDialogue();
+        } catch (error) {
+          console.error('裁剪消息文本失败:', error);
+        }
       }
+
+      // 然后删除后续对话并触发 AI 回复
+      if (currentMessageId !== undefined && currentMessageId < lastMessageId) {
+        const messagesToDelete: number[] = [];
+        for (let i = currentMessageId + 1; i <= lastMessageId; i++) {
+          messagesToDelete.push(i);
+        }
+        if (messagesToDelete.length > 0) {
+          await deleteChatMessages(messagesToDelete, { refresh: 'all' });
+          console.info(`已删除 ${messagesToDelete.length} 条后续消息`);
+        }
+      }
+
+      // 发送用户输入的消息
+      await createChatMessages(
+        [
+          {
+            role: 'user',
+            message: messageText,
+          },
+        ],
+        { refresh: 'all' },
+      );
+      console.info('已发送用户消息（自定义输入）:', messageText);
+
+      // 准备流式界面
+      const expectedMessageId = getLastMessageId() + 1;
+      isStreaming.value = true;
+      streamingText.value = '';
+      streamingMessageId.value = expectedMessageId;
+
+      // 触发 AI 生成回复
+      await triggerSlash('/trigger');
+      console.info('已触发 AI 生成（自定义输入）');
+
+      // 重新加载对话数据
+      await loadDialoguesFromTavern();
+
+      // 跳转到最新对话
+      nextTick(() => {
+        if (dialogues.value.length > 0) {
+          const newMessage = dialogues.value.find(d => d.message_id === expectedMessageId);
+          if (newMessage) {
+            currentDialogIndex.value = dialogues.value.indexOf(newMessage);
+          } else {
+            currentDialogIndex.value = dialogues.value.length - 1;
+          }
+        }
+      });
+    } else if (!isAllDialoguesLoaded) {
+      // 普通选项：只显示角色回复，不删除后续对话，不触发 AI 回复
+      // 继续下一条对话
+      nextDialogue();
     }
   } catch (error) {
     console.error('处理选择时出错:', error);
@@ -1599,7 +1588,7 @@ function getDisplayText(): string {
   if (!dialogue) return '';
 
   // 确保返回有效文本
-  const text = dialogue.text || dialogue.message || '';
+  const text = dialogue.text || '';
   if (!text) return '';
 
   // 如果当前消息正在流式加载

@@ -9,7 +9,7 @@
  * - 支持从 IndexedDB 加载本地文件
  */
 
-import { getIndexedDbFileUrl } from './utils/indexedDB';
+import { getIndexedDbFileUrl } from '../../utils/indexedDB';
 
 // Live2D 模型配置接口
 export interface Live2DModelConfig {

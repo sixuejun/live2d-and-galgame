@@ -29,7 +29,8 @@ export interface DialogueItem {
     吐槽?: string;
     待办?: string;
     小剧场?: string;
-  };
+    [key: string]: any;
+  } | null;
   isEditable?: boolean; // 是否为可编辑的用户消息
   editedText?: string; // 编辑后的文本（内存中）
   isDeleted?: boolean; // 是否已删除（内存中）
