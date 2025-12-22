@@ -272,7 +272,12 @@ async function matchWorldbookResources(
     // 匹配立绘：完全和背景、CG一样的实现方式
     if (characterName && resources.sprites) {
       const matchText = characterName;
-      console.info('[立绘匹配] 开始匹配立绘，角色名:', characterName, '可用立绘数量:', resources.sprites.sprites.length);
+      console.info(
+        '[立绘匹配] 开始匹配立绘，角色名:',
+        characterName,
+        '可用立绘数量:',
+        resources.sprites.sprites.length,
+      );
       for (const sprite of resources.sprites.sprites) {
         // 匹配顺序：先匹配 textMappings，再匹配 name（和背景、CG完全一致）
         // 注意：这里使用 || 运算符，所以先检查 textMappings，如果匹配就返回 true

@@ -7,10 +7,7 @@ export class LAppPal {
   /**
    * 将文件作为字节数据读取
    */
-  public static loadFileAsBytes(
-    filePath: string,
-    callback: (arrayBuffer: ArrayBuffer, size: number) => void
-  ): void {
+  public static loadFileAsBytes(filePath: string, callback: (arrayBuffer: ArrayBuffer, size: number) => void): void {
     fetch(filePath)
       .then(response => response.arrayBuffer())
       .then(arrayBuffer => callback(arrayBuffer, arrayBuffer.byteLength))
@@ -49,4 +46,3 @@ export class LAppPal {
   static lastFrame = 0.0;
   static deltaTime = 0.0;
 }
-

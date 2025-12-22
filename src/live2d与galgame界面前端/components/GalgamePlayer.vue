@@ -892,11 +892,12 @@ async function loadDialoguesFromTavern() {
 
           console.info('[对话创建] CG模式判断:', {
             isCGMode,
-            reason: block.isCG === true
-              ? '明确指定CG场景格式，进入CG模式'
-              : block.isCG === false
-                ? '普通模式，使用立绘或模型'
-                : '未设置isCG，使用默认逻辑',
+            reason:
+              block.isCG === true
+                ? '明确指定CG场景格式，进入CG模式'
+                : block.isCG === false
+                  ? '普通模式，使用立绘或模型'
+                  : '未设置isCG，使用默认逻辑',
           });
 
           const dialogue: DialogueItem = {

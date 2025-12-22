@@ -29,4 +29,3 @@ defineProps<Props>();
   white-space: pre-wrap;
 }
 </style>
-

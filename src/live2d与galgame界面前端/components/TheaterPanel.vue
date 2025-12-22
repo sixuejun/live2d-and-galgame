@@ -10,11 +10,7 @@
       <!-- 标题栏 -->
       <div class="border-border/30 flex items-center justify-between border-b px-6 py-3">
         <h2 class="text-lg font-medium">🌿 · 小剧场 · 🌿</h2>
-        <button
-          class="hover:bg-muted rounded-full p-1 transition-colors"
-          aria-label="关闭"
-          @click="handleClose"
-        >
+        <button class="hover:bg-muted rounded-full p-1 transition-colors" aria-label="关闭" @click="handleClose">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -23,10 +19,7 @@
 
       <!-- 内容区域 -->
       <div class="theater-content max-h-[calc(85vh-100px)] overflow-y-auto px-6 py-4">
-        <div
-          ref="theaterContainer"
-          class="theater-bubbles-container space-y-3"
-        ></div>
+        <div ref="theaterContainer" class="theater-bubbles-container space-y-3"></div>
       </div>
     </div>
   </div>
@@ -180,4 +173,3 @@ watch(
   background: rgba(0, 0, 0, 0.3);
 }
 </style>
-
