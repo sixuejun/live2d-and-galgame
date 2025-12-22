@@ -19,7 +19,11 @@
       </button>
 
       <!-- 对话框主体 -->
-      <div class="flex-1 relative p-4 md:p-5 min-h-[120px]" :style="boxStyle">
+      <div
+        class="flex-1 relative p-4 md:p-5 min-h-[120px]"
+        :class="[isNarration ? 'flex flex-col' : '']"
+        :style="boxStyle"
+      >
         <!-- 内置左箭头 -->
         <div v-if="isInnerArrow" class="absolute left-2 top-1/2 -translate-y-1/2 z-10">
           <button
@@ -40,6 +44,7 @@
 
         <!-- 角色名区域 -->
         <div
+          v-if="!isNarration"
           class="h-6 mb-2 flex items-start"
           :style="{
             paddingLeft: isInnerArrow ? '48px' : 0,
@@ -47,7 +52,6 @@
           }"
         >
           <div
-            v-if="!isNarration"
             class="px-3 py-1 text-sm font-medium"
             :style="{
               backgroundColor: dialogStyle.colors.nameBackground,
@@ -96,24 +100,19 @@
 
         <!-- 文字内容 -->
         <div
+          ref="textContentRef"
           :class="[
             'leading-relaxed',
-            isNarration
-              ? isLongNarration
-                ? 'italic text-center' // 长文本时，文本内容水平居中，容器从顶部开始
-                : 'italic text-center flex items-center justify-center' // 短文本时，垂直居中显示
-              : '',
+            isNarration ? `italic text-center flex-1 flex flex-col ${narrationJustifyClass}` : '',
           ]"
           :style="{
             color: isNarration ? dialogStyle.colors.narrationText : dialogStyle.colors.dialogText,
             fontSize: `${dialogStyle.fontSize}px`,
             paddingLeft: isInnerArrow ? '48px' : 0,
             paddingRight: isInnerArrow ? '48px' : 0,
-            minHeight: isNarration && !isLongNarration ? 'calc(100% - 24px)' : undefined, // 短文本时占满剩余高度以垂直居中
           }"
         >
-          <span v-html="formatTextWithThoughts(displayedText)"></span>
-          <span v-if="isTyping" class="animate-pulse ml-0.5">|</span>
+          <span v-html="formatTextWithCursor(displayedText, isTyping)"></span>
         </div>
 
         <!-- 呼吸指示器 -->
@@ -214,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, ref, VNode, watch } from 'vue';
+import { computed, h, nextTick, onMounted, onUnmounted, ref, VNode, watch } from 'vue';
 import {
   type DialogBoxStyle,
   arrowShapePresets,
@@ -252,6 +251,15 @@ let typingTimer: ReturnType<typeof setInterval> | null = null;
 
 const TYPING_SPEED = 50;
 
+// 用于检测narration文本是否需要换行
+const textContentRef = ref<HTMLElement | null>(null);
+const needsWrapping = ref(false);
+
+// 根据是否需要换行来决定对齐方式
+const narrationJustifyClass = computed(() => {
+  return needsWrapping.value ? 'justify-start' : 'justify-center';
+});
+
 const dialogStyle = computed(() => props.customStyle || defaultDialogStyle);
 const boxShape = computed(() => boxShapePresets.find(p => p.id === dialogStyle.value.boxShape) || boxShapePresets[0]);
 const nameShape = computed(
@@ -272,13 +280,6 @@ const isNarration = computed(() => !props.character || props.character.trim() ==
 const isInnerArrow = computed(() => arrowShape.value.isInner);
 const isMinimalArrow = computed(() => arrowShape.value.type === 'minimal');
 const isPillShape = computed(() => dialogStyle.value.boxShape === 'pill');
-
-// 判断旁白文本是否过长，过长时应该从顶部开始显示（不使用垂直居中）
-const isLongNarration = computed(() => {
-  if (!isNarration.value) return false;
-  // 当文本长度超过80个字符时，认为是长文本，应该从顶部开始显示
-  return (props.text?.length || 0) > 80;
-});
 
 // 背景图案样式
 const getPatternStyle = computed((): Record<string, string> => {
@@ -480,6 +481,17 @@ function formatTextWithThoughts(text: string): string {
   });
 }
 
+// 格式化文本并添加光标
+function formatTextWithCursor(text: string, showCursor: boolean): string {
+  const formattedText = formatTextWithThoughts(text);
+  if (showCursor) {
+    // 将光标直接插入到文本末尾，确保它紧跟着文本
+    // 使用 display: inline 确保光标是内联元素，不会导致换行
+    return formattedText + '<span class="animate-pulse" style="display: inline; margin-left: 2px;">|</span>';
+  }
+  return formattedText;
+}
+
 function clearTypingTimer() {
   if (typingTimer) {
     clearInterval(typingTimer);
@@ -517,6 +529,85 @@ function startTyping() {
   }, TYPING_SPEED);
 }
 
+// 检测文本是否需要换行
+function checkTextWrapping() {
+  if (!isNarration.value || !textContentRef.value) {
+    needsWrapping.value = false;
+    return;
+  }
+
+  nextTick(() => {
+    if (!textContentRef.value) return;
+
+    const element = textContentRef.value;
+    const span = element.querySelector('span');
+    if (!span || !displayedText.value) {
+      needsWrapping.value = false;
+      return;
+    }
+
+    // 获取容器的实际宽度（减去padding）
+    const containerWidth = element.offsetWidth;
+    const paddingLeft = parseInt(getComputedStyle(element).paddingLeft) || 0;
+    const paddingRight = parseInt(getComputedStyle(element).paddingRight) || 0;
+    const availableWidth = containerWidth - paddingLeft - paddingRight;
+
+    if (availableWidth <= 0) {
+      needsWrapping.value = false;
+      return;
+    }
+
+    // 创建一个临时元素来测量文本是否需要换行
+    const tempDiv = document.createElement('div');
+    tempDiv.style.visibility = 'hidden';
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.top = '-9999px';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.width = `${availableWidth}px`;
+    tempDiv.style.fontSize = `${dialogStyle.value.fontSize}px`;
+    tempDiv.style.fontStyle = 'italic';
+    tempDiv.style.fontFamily = getComputedStyle(element).fontFamily;
+    tempDiv.style.lineHeight = getComputedStyle(element).lineHeight;
+    tempDiv.style.textAlign = 'center';
+    tempDiv.style.whiteSpace = 'normal';
+    tempDiv.style.wordWrap = 'break-word';
+    tempDiv.style.overflowWrap = 'break-word';
+
+    // 复制文本内容（使用innerHTML来保留格式，但去除可能影响测量的元素）
+    const textContent = span.innerHTML || '';
+    // 移除打字机光标等可能影响测量的元素
+    const cleanContent = textContent.replace(/<span[^>]*class="[^"]*animate-pulse[^"]*"[^>]*>.*?<\/span>/gi, '');
+    tempDiv.innerHTML = cleanContent || 'M';
+
+    document.body.appendChild(tempDiv);
+
+    // 测量单行高度（使用单个字符）
+    const singleLineDiv = document.createElement('div');
+    singleLineDiv.style.visibility = 'hidden';
+    singleLineDiv.style.position = 'absolute';
+    singleLineDiv.style.top = '-9999px';
+    singleLineDiv.style.left = '-9999px';
+    singleLineDiv.style.width = `${availableWidth}px`;
+    singleLineDiv.style.fontSize = `${dialogStyle.value.fontSize}px`;
+    singleLineDiv.style.fontStyle = 'italic';
+    singleLineDiv.style.fontFamily = getComputedStyle(element).fontFamily;
+    singleLineDiv.style.lineHeight = getComputedStyle(element).lineHeight;
+    singleLineDiv.style.textAlign = 'center';
+    singleLineDiv.style.whiteSpace = 'nowrap';
+    singleLineDiv.textContent = 'M';
+    document.body.appendChild(singleLineDiv);
+
+    const singleLineHeight = singleLineDiv.offsetHeight;
+    const actualHeight = tempDiv.offsetHeight;
+
+    document.body.removeChild(tempDiv);
+    document.body.removeChild(singleLineDiv);
+
+    // 如果实际高度明显大于单行高度（考虑一些误差），则认为需要换行
+    needsWrapping.value = actualHeight > singleLineHeight * 1.3;
+  });
+}
+
 watch(
   () => [props.text, props.dialogKey, props.isLoading],
   () => {
@@ -525,8 +616,23 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => displayedText.value,
+  () => {
+    if (isNarration.value) {
+      // 使用 setTimeout 确保 DOM 完全更新后再检测
+      setTimeout(() => {
+        checkTextWrapping();
+      }, 10);
+    }
+  },
+);
+
 onMounted(() => {
   startTyping();
+  if (isNarration.value) {
+    checkTextWrapping();
+  }
 });
 
 onUnmounted(() => {
