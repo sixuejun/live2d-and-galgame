@@ -346,7 +346,9 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
           configFile: path.join(import.meta.dirname, 'tsconfig.json'),
         }),
       ],
-      alias: {},
+      alias: {
+        '@framework': path.join(import.meta.dirname, '初始模板/CubismSdkForWeb-5-r.4/Framework/src'),
+      },
     },
     plugins: (entry.html === undefined
       ? [new MiniCssExtractPlugin()]

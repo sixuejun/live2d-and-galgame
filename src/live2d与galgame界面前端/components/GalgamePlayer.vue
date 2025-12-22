@@ -72,7 +72,25 @@
       <button
         v-if="characterMenuExpanded"
         class="bg-card/80 text-foreground animate-in fade-in slide-in-from-top-2 flex items-center gap-2 rounded-full p-2 pr-4 shadow-lg backdrop-blur-sm transition-colors duration-200 hover:bg-card"
-        style="animation-delay: 50ms"
+        style="animation-delay: 25ms"
+        aria-label="手机"
+        @click.stop="handleTheaterClick"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M7 4h10a1 1 0 011 1v14a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z"
+          />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-2 14h2" />
+        </svg>
+        <span class="text-sm">手机</span>
+      </button>
+      <button
+        v-if="characterMenuExpanded"
+        class="bg-card/80 text-foreground animate-in fade-in slide-in-from-top-2 flex items-center gap-2 rounded-full p-2 pr-4 shadow-lg backdrop-blur-sm transition-colors duration-200 hover:bg-card"
+        style="animation-delay: 75ms"
         aria-label="输入"
         @click.stop="handleInputClick"
       >
@@ -85,6 +103,25 @@
           />
         </svg>
         <span class="text-sm">输入</span>
+      </button>
+
+      <!-- 手机图标提示（有未读消息时显示） -->
+      <button
+        v-if="hasUnreadMessages"
+        class="bg-card/80 text-foreground animate-in fade-in slide-in-from-top-2 flex items-center justify-center rounded-full p-2 shadow-lg backdrop-blur-sm transition-all duration-200 hover:bg-card hover:scale-110"
+        style="animation-delay: 100ms"
+        aria-label="查看未读消息"
+        @click.stop="handleQuickTheaterClick"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M7 4h10a1 1 0 011 1v14a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z"
+          />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-2 14h2" />
+        </svg>
       </button>
     </div>
 
@@ -207,6 +244,22 @@
       :on-save="handleSaveToStory"
     />
 
+    <!-- 小纸条（位于对话框上方，界面右端） -->
+    <div
+      v-if="
+        !blackScreen &&
+        !showChoices &&
+        currentDialogue &&
+        currentDialogue.noteContent &&
+        currentDialogue.type !== 'blackscreen' &&
+        currentDialogue.type !== 'choice'
+      "
+      class="absolute top-20 right-4 z-40"
+      style="max-width: 280px"
+    >
+      <NoteCard :content="currentDialogue.noteContent" />
+    </div>
+
     <!-- 对话框 -->
     <DialogBox
       v-if="
@@ -258,6 +311,14 @@
       :message-id="currentDialogue?.message_id"
       :status-block="currentDialogue?.statusBlock"
       :on-close="() => (showCharacterPanel = false)"
+    />
+
+    <!-- 小剧场面板（手机按钮） -->
+    <TheaterPanel
+      :show="showTheaterPanel"
+      :message-id="currentDialogue?.message_id"
+      :status-block="currentDialogue?.statusBlock"
+      :on-close="() => (showTheaterPanel = false)"
     />
 
     <!-- 历史对话框 -->
@@ -456,7 +517,9 @@ import CharacterSprite from './CharacterSprite.vue';
 import CharacterStatusPanel from './CharacterStatusPanel.vue';
 import ChoiceBox from './ChoiceBox.vue';
 import DialogBox from './DialogBox.vue';
+import NoteCard from './NoteCard.vue';
 import SettingsPanel from './SettingsPanel.vue';
+import TheaterPanel from './TheaterPanel.vue';
 
 // 常量：localStorage 键名
 const STORAGE_KEYS = {
@@ -480,6 +543,7 @@ const autoPlaySpeed = ref(3000);
 const menuExpanded = ref(false);
 const characterMenuExpanded = ref(false);
 const showCharacterPanel = ref(false);
+const showTheaterPanel = ref(false);
 const blackScreen = ref(false);
 const blackScreenText = ref('');
 const showChoices = ref(false);
@@ -605,17 +669,25 @@ const backgroundImage = computed(() => {
 const currentSpriteType = computed<'live2d' | 'image' | 'none'>(() => {
   const dialogue = currentDialogue.value;
   if (dialogue?.sprite?.type) {
+    console.info('[GalgamePlayer] currentSpriteType: 从 dialogue.sprite.type 获取', dialogue.sprite.type);
     return dialogue.sprite.type;
   }
   // CG模式不显示立绘
   if (dialogue?.isCG || dialogue?.type === 'cg') {
+    console.info('[GalgamePlayer] currentSpriteType: CG模式，返回 none');
     return 'none';
   }
   // 默认：如果有角色名且匹配到 Live2D 模型，使用 Live2D；否则使用图片
   if (dialogue?.character) {
     const hasLive2d = live2dModels.value.some(m => m.name === dialogue.character);
+    console.info('[GalgamePlayer] currentSpriteType: 自动判断', {
+      character: dialogue.character,
+      hasLive2d,
+      availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+    });
     return hasLive2d ? 'live2d' : 'image';
   }
+  console.info('[GalgamePlayer] currentSpriteType: 默认返回 image');
   return 'image';
 });
 
@@ -627,13 +699,23 @@ const currentImageUrl = computed(() => {
 const currentLive2dModelId = computed(() => {
   const dialogue = currentDialogue.value;
   if (dialogue?.sprite?.live2dModelId) {
+    console.info(
+      '[GalgamePlayer] currentLive2dModelId: 从 dialogue.sprite.live2dModelId 获取',
+      dialogue.sprite.live2dModelId,
+    );
     return dialogue.sprite.live2dModelId;
   }
   // 自动匹配：根据角色名查找模型
   if (dialogue?.character) {
     const model = live2dModels.value.find(m => m.name === dialogue.character);
+    console.info('[GalgamePlayer] currentLive2dModelId: 自动匹配角色名', {
+      character: dialogue.character,
+      foundModel: model ? { id: model.id, name: model.name } : null,
+      availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+    });
     return model?.id;
   }
+  console.info('[GalgamePlayer] currentLive2dModelId: 未找到模型ID');
   return undefined;
 });
 
@@ -650,6 +732,8 @@ async function loadDialoguesFromTavern() {
     let lastSpriteState: DialogueItem['sprite'] | undefined; // 上一次角色立绘/Live2D 状态
     let lastMotion: string | undefined; // 上一次 Live2D 动作
     let lastExpression: string | undefined; // 上一次 Live2D 表情
+    let lastIsCG: boolean | undefined; // 上一次是否为CG模式
+    let lastCgImageUrl: string | undefined; // 上一次CG图片URL
 
     // 继承背景，避免同一场景切换时闪动
     const inheritSceneAndBackground = (dialogue: DialogueItem) => {
@@ -662,6 +746,18 @@ async function loadDialoguesFromTavern() {
         (!dialogue.scene || (lastScene && dialogue.scene === lastScene))
       ) {
         dialogue.sceneImageUrl = lastSceneImageUrl;
+      }
+    };
+
+    // 继承CG状态（narration等块应该继承CG状态，避免打断CG场景）
+    const inheritCGState = (dialogue: DialogueItem) => {
+      if (dialogue.type === 'blackscreen') return;
+      // 如果当前对话没有设置CG状态，且上一次是CG模式，则继承CG状态
+      if (dialogue.isCG === undefined && lastIsCG) {
+        dialogue.isCG = lastIsCG;
+        if (lastCgImageUrl) {
+          dialogue.cgImageUrl = lastCgImageUrl;
+        }
       }
     };
 
@@ -692,9 +788,32 @@ async function loadDialoguesFromTavern() {
 
     // 仅在新角色块出现时更新立绘/Live2D 状态
     const updateSpriteStateFromCharacter = (dialogue: DialogueItem) => {
-      lastSpriteState = dialogue.sprite ? { ...dialogue.sprite } : undefined;
-      lastMotion = dialogue.motion;
-      lastExpression = dialogue.expression;
+      // 如果是普通模式的character块（isCG === false），会打断CG模式
+      if (dialogue.isCG === false) {
+        // 离开CG模式，更新立绘/Live2D状态
+        lastSpriteState = dialogue.sprite ? { ...dialogue.sprite } : undefined;
+        lastMotion = dialogue.motion;
+        lastExpression = dialogue.expression;
+        lastIsCG = false;
+        lastCgImageUrl = undefined;
+      } else if (dialogue.isCG === true) {
+        // 进入CG模式，清除立绘/Live2D状态
+        lastSpriteState = undefined;
+        lastMotion = undefined;
+        lastExpression = undefined;
+        lastIsCG = true;
+        lastCgImageUrl = dialogue.cgImageUrl;
+      } else {
+        // 未明确设置isCG，保持原有逻辑
+        lastSpriteState = dialogue.sprite ? { ...dialogue.sprite } : undefined;
+        lastMotion = dialogue.motion;
+        lastExpression = dialogue.expression;
+        // 如果当前对话设置了isCG，更新CG状态
+        if (dialogue.isCG !== undefined) {
+          lastIsCG = dialogue.isCG;
+          lastCgImageUrl = dialogue.cgImageUrl;
+        }
+      }
     };
 
     // 处理每条消息
@@ -744,7 +863,7 @@ async function loadDialoguesFromTavern() {
           const motionToUse = block.motionFile || block.motion;
           const expressionToUse = block.expressionFile || block.expression;
 
-          // 检查是否有motion和expression
+          // 检查是否有motion和expression（仅针对Live2D模型）
           const hasMotionExpr = hasMotionAndExpression(
             block.character || '',
             motionToUse,
@@ -752,9 +871,33 @@ async function loadDialoguesFromTavern() {
             live2dModels.value,
           );
 
-          // 如果是CG模式或没有motion/expression，进入CG模式
-          const isCGMode = block.isCG || !hasMotionExpr;
           const live2dModel = live2dModels.value.find(m => m.name === block.character);
+          const hasSpriteImage = !!block.spriteImageUrl || !!msg.extra?.sprite_image;
+
+          console.info('[对话创建] 资源检查:', {
+            character: block.character,
+            hasLive2dModel: !!live2dModel,
+            hasMotionExpr,
+            hasSpriteImage,
+            spriteImageUrl: block.spriteImageUrl,
+            blockIsCG: block.isCG,
+          });
+
+          // 判断是否进入CG模式：
+          // 1. 只有明确指定了CG场景格式（block.isCG === true）时才进入CG模式
+          // 2. CG模式下不展示立绘和模型，优先展示CG
+          // 3. 普通模式（block.isCG === false）使用立绘或模型
+          // 4. CG模式不会被旁白、用户消息、选择格式打断（通过继承CG状态实现）
+          const isCGMode = block.isCG === true;
+
+          console.info('[对话创建] CG模式判断:', {
+            isCGMode,
+            reason: block.isCG === true
+              ? '明确指定CG场景格式，进入CG模式'
+              : block.isCG === false
+                ? '普通模式，使用立绘或模型'
+                : '未设置isCG，使用默认逻辑',
+          });
 
           const dialogue: DialogueItem = {
             character: block.character,
@@ -772,11 +915,28 @@ async function loadDialoguesFromTavern() {
             statusBlock,
             sprite: isCGMode
               ? { type: 'none' } // CG模式不显示立绘
-              : {
-                  type: live2dModel ? 'live2d' : 'image',
-                  live2dModelId: live2dModel?.id,
-                  imageUrl: block.spriteImageUrl || msg.extra?.sprite_image || undefined,
-                },
+              : (() => {
+                  const imageUrl = block.spriteImageUrl || msg.extra?.sprite_image || undefined;
+                  console.info(
+                    '[对话创建] 角色:',
+                    block.character,
+                    'spriteImageUrl:',
+                    block.spriteImageUrl,
+                    '最终imageUrl:',
+                    imageUrl,
+                    'spriteType:',
+                    live2dModel ? 'live2d' : 'image',
+                    'isCGMode:',
+                    isCGMode,
+                    'hasSpriteImage:',
+                    hasSpriteImage,
+                  );
+                  return {
+                    type: live2dModel ? 'live2d' : 'image',
+                    live2dModelId: live2dModel?.id,
+                    imageUrl,
+                  };
+                })(),
           };
 
           inheritSceneAndBackground(dialogue);
@@ -797,17 +957,22 @@ async function loadDialoguesFromTavern() {
 
           inheritSceneAndBackground(dialogue);
           inheritSpriteState(dialogue);
+          inheritCGState(dialogue); // 继承CG状态，避免narration块打断CG场景
           newDialogues.push(dialogue);
           updateSceneState(dialogue);
         } else if (block.type === 'blacktext') {
-          newDialogues.push({
+          const dialogue: DialogueItem = {
             character: '',
             text: block.message || '',
             type: 'blackscreen',
             message_id: msg.message_id,
             role: 'system',
             statusBlock,
-          });
+          };
+          // blacktext块会打断CG模式，清除CG状态
+          lastIsCG = undefined;
+          lastCgImageUrl = undefined;
+          newDialogues.push(dialogue);
         } else if (block.type === 'user') {
           const dialogue: DialogueItem = {
             character: '你',
@@ -824,6 +989,7 @@ async function loadDialoguesFromTavern() {
 
           inheritSceneAndBackground(dialogue);
           inheritSpriteState(dialogue);
+          inheritCGState(dialogue); // 继承CG状态
           // 应用编辑（如果有）
           const edit = userMessageEdits.value.get(msg.message_id);
           if (edit) {
@@ -837,6 +1003,25 @@ async function loadDialoguesFromTavern() {
 
           newDialogues.push(dialogue);
           updateSceneState(dialogue);
+        } else if (block.type === 'note') {
+          // 小纸条块：附加到上一个对话项，如果没有则创建新项
+          if (newDialogues.length > 0) {
+            const lastDialogue = newDialogues[newDialogues.length - 1];
+            lastDialogue.noteContent = block.noteContent;
+          } else {
+            // 如果没有对话项，创建一个空的对话项来承载小纸条
+            const dialogue: DialogueItem = {
+              character: '',
+              text: '',
+              type: 'narration',
+              message_id: msg.message_id,
+              role: 'system',
+              noteContent: block.noteContent,
+              statusBlock,
+            };
+            inheritSceneAndBackground(dialogue);
+            newDialogues.push(dialogue);
+          }
         } else if (block.type === 'choice') {
           // 跳过，稍后统一处理
         }
@@ -863,6 +1048,7 @@ async function loadDialoguesFromTavern() {
 
         inheritSceneAndBackground(choiceDialogue);
         inheritSpriteState(choiceDialogue);
+        inheritCGState(choiceDialogue); // 继承CG状态
         newDialogues.push(choiceDialogue);
         updateSceneState(choiceDialogue);
       } else if (oldFormatChoiceBlocks.length > 0) {
@@ -887,6 +1073,7 @@ async function loadDialoguesFromTavern() {
 
         inheritSceneAndBackground(choiceDialogue);
         inheritSpriteState(choiceDialogue);
+        inheritCGState(choiceDialogue); // 继承CG状态
         newDialogues.push(choiceDialogue);
         updateSceneState(choiceDialogue);
       }
@@ -894,12 +1081,24 @@ async function loadDialoguesFromTavern() {
 
     // 过滤已删除的消息
     const filteredDialogues = newDialogues.filter(d => !d.isDeleted);
+
+    // 记录当前播放位置（如果对话列表已存在）
+    const previousLength = dialogues.value.length;
+
     dialogues.value = filteredDialogues;
 
-    // 如果有新对话，自动跳转到最新
-    if (filteredDialogues.length > 0 && currentDialogIndex.value < filteredDialogues.length - 1) {
-      currentDialogIndex.value = filteredDialogues.length - 1;
+    // 不自动跳转到最新，保持用户播放位置
+    // 如果是首次加载（previousLength === 0），显示第一条对话
+    if (previousLength === 0 && filteredDialogues.length > 0) {
+      currentDialogIndex.value = 0;
     }
+    // 如果之前已经在末尾，且新对话数量增加，保持在当前位置（不跳转）
+    // 否则保持在当前索引（如果索引仍然有效）
+    else if (currentDialogIndex.value >= filteredDialogues.length) {
+      // 如果当前索引超出范围，调整到最后一个有效索引
+      currentDialogIndex.value = Math.max(0, filteredDialogues.length - 1);
+    }
+    // 其他情况保持当前索引不变
 
     console.info(`加载了 ${dialogues.value.length} 条对话`);
 
@@ -973,6 +1172,120 @@ function loadTestDialogues() {
     },
     {
       character: '',
+      text: '--- 以下是 Live2D 模型和立绘测试 ---',
+      type: 'narration' as const,
+    },
+    {
+      character: '',
+      text: '测试 1：程北极 Live2D 模型 - 正常动作 + 微笑表情',
+      type: 'narration' as const,
+      scene: '程北极房间白天',
+    },
+    {
+      character: '程北极',
+      text: '你好，我是程北极。这是 Live2D 模型的测试，使用了"正常动作"和"微笑"表情。',
+      type: undefined,
+      scene: '程北极房间白天',
+      motion: '正常动作',
+      expression: '微笑',
+      sprite: { type: 'live2d' as const, live2dModelId: '程北极' },
+    },
+    {
+      character: '',
+      text: '测试 2：程北极 Live2D 模型 - 抱臂动作 + 严肃表情',
+      type: 'narration' as const,
+      scene: '操场',
+    },
+    {
+      character: '程北极',
+      text: '这是另一个测试，使用了"抱臂"动作和"严肃"表情。',
+      type: undefined,
+      scene: '操场',
+      motion: '抱臂',
+      expression: '严肃',
+      sprite: { type: 'live2d' as const, live2dModelId: '程北极' },
+    },
+    {
+      character: '',
+      text: '测试 3：程北极 Live2D 模型 - 叹气动作 + 困惑表情',
+      type: 'narration' as const,
+      scene: '房间白天',
+    },
+    {
+      character: '程北极',
+      text: '这是"叹气"动作和"困惑"表情的测试。',
+      type: undefined,
+      scene: '房间白天',
+      motion: '叹气',
+      expression: '困惑',
+      sprite: { type: 'live2d' as const, live2dModelId: '程北极' },
+    },
+    {
+      character: '',
+      text: '测试 4：女同学立绘（没有 Live2D 模型，使用立绘资源）',
+      type: 'narration' as const,
+      scene: '操场',
+    },
+    {
+      character: '女同学',
+      text: '呀？程北极你在等人吗？这是立绘资源的测试，我没有 Live2D 模型，所以会显示立绘图片。',
+      type: undefined,
+      scene: '操场',
+      sprite: {
+        type: 'image' as const,
+        imageUrl: 'https://iili.io/f01ajiN.png', // 校服女NPC 立绘
+      },
+    },
+    {
+      character: '',
+      text: '测试 5：程北极回复 - 正常动作 + 正常表情',
+      type: 'narration' as const,
+    },
+    {
+      character: '程北极',
+      text: '嗯，在等人。这是回复测试，使用了"正常动作"和"正常表情"。',
+      type: undefined,
+      motion: '正常动作',
+      expression: '正常表情',
+      sprite: { type: 'live2d' as const, live2dModelId: '程北极' },
+    },
+    {
+      character: '',
+      text: '测试 6：程北极 Live2D 模型 - 向右看动作 + 害羞表情',
+      type: 'narration' as const,
+      scene: '巴士站白天',
+    },
+    {
+      character: '程北极',
+      text: '这是"向右看"动作和"害羞"表情的测试。',
+      type: undefined,
+      scene: '巴士站白天',
+      motion: '向右看',
+      expression: '害羞',
+      sprite: { type: 'live2d' as const, live2dModelId: '程北极' },
+    },
+    {
+      character: '',
+      text: '测试 7：程北极 Live2D 模型 - 摇头动作 + 无语表情',
+      type: 'narration' as const,
+      scene: '程北极房间夜晚',
+    },
+    {
+      character: '程北极',
+      text: '这是"摇头"动作和"无语"表情的测试。',
+      type: undefined,
+      scene: '程北极房间夜晚',
+      motion: '摇头',
+      expression: '无语',
+      sprite: { type: 'live2d' as const, live2dModelId: '程北极' },
+    },
+    {
+      character: '',
+      text: '--- Live2D 模型和立绘测试结束 ---',
+      type: 'narration' as const,
+    },
+    {
+      character: '',
       text: '测试对话到此结束。在实际使用时，对话数据会从酒馆消息中自动读取。',
       type: 'narration' as const,
     },
@@ -1028,10 +1341,49 @@ async function loadLive2dModels() {
           if (modelData.expressions && modelData.expressions.length > 0) {
             existingModel.expressions = modelData.expressions.map(e => e.name || e.file);
           }
+          // 更新 textMappings（如果世界书中有）
+          if (modelData.textMappings) {
+            existingModel.textMappings = modelData.textMappings;
+          }
         } else {
-          // 如果角色卡变量中没有该模型，但世界书中有，创建基础配置
-          // 这种情况下通常不会发生，因为模型应该先在角色卡变量中定义
-          console.warn(`世界书中找到模型 ${modelName}，但角色卡变量中未找到对应配置`);
+          // 如果角色卡变量中没有该模型，但世界书中有，从世界书创建完整配置
+          const model3Url = modelData.files?.model3 || '';
+          // 如果 model3 是完整 URL，直接使用；否则需要 basePath
+          const isFullUrl = model3Url.startsWith('http://') || model3Url.startsWith('https://');
+          const basePath = isFullUrl
+            ? model3Url.substring(0, model3Url.lastIndexOf('/') + 1)
+            : model3Url.substring(0, model3Url.lastIndexOf('/') + 1);
+          // 如果 model3 是完整 URL，modelPath 使用完整 URL；否则只使用文件名
+          const modelPath = isFullUrl ? model3Url : model3Url ? model3Url.split('/').pop() : '';
+
+          const newModel: any = {
+            name: modelName, // 使用modelName作为name（例如"程北极"）
+            id: modelName, // 使用modelName作为id
+            basePath,
+            modelPath,
+            version: 3, // Live2D Cubism 3.0
+            textures: modelData.files?.textures || [],
+            motions:
+              modelData.motions?.map(m => ({
+                group: m.group || 'idle',
+                name: m.name,
+                file: m.file,
+              })) || [],
+            expressions: modelData.expressions?.map(e => e.name || e.file) || [],
+            defaultAnimation: modelData.defaultAnimation,
+            textMappings: modelData.textMappings, // 保存 textMappings 用于文本描述匹配
+          };
+
+          console.info(`[GalgamePlayer] 从世界书创建模型配置: ${modelName}`, {
+            modelPath,
+            basePath,
+            isFullUrl,
+            motionsCount: newModel.motions.length,
+            expressionsCount: newModel.expressions.length,
+          });
+
+          modelsMap.set(modelName, newModel);
+          console.info(`从世界书创建模型配置: ${modelName}`);
         }
       }
     } catch (error) {
@@ -1039,7 +1391,19 @@ async function loadLive2dModels() {
     }
 
     live2dModels.value = Array.from(modelsMap.values());
-    console.info(`加载了 ${live2dModels.value.length} 个 Live2D 模型配置（已合并世界书资源）`);
+    console.info(`[GalgamePlayer] 加载了 ${live2dModels.value.length} 个 Live2D 模型配置（已合并世界书资源）`);
+    console.info(
+      '[GalgamePlayer] 模型列表详情:',
+      live2dModels.value.map(m => ({
+        id: m.id,
+        name: m.name,
+        modelPath: m.modelPath,
+        basePath: m.basePath,
+        motionsCount: m.motions?.length || 0,
+        expressionsCount: m.expressions?.length || 0,
+        hasTextMappings: !!m.textMappings,
+      })),
+    );
   } catch (error) {
     console.error('加载 Live2D 模型配置失败:', error);
   }
@@ -1184,14 +1548,24 @@ onMounted(() => {
   // 监听聊天消息变化
   if (typeof eventOn === 'function' && typeof tavern_events !== 'undefined') {
     // 监听新消息
-    const messageReceivedCleanup = eventOn(tavern_events.MESSAGE_RECEIVED, async (messageId: number) => {
-      await loadDialoguesFromTavern();
-      // 自动跳转到最新消息
-      if (autoPlay.value) {
-        currentDialogIndex.value = dialogues.value.length - 1;
+    const messageReceivedCleanup = eventOn(tavern_events.MESSAGE_RECEIVED, async (messageId: string | number) => {
+      const messageIdNum = Number(messageId);
+
+      // 解析消息中的 phone 标签并更新世界书
+      try {
+        const messages = getChatMessages(messageIdNum);
+        if (messages.length > 0) {
+          const messageText = messages[0].message || '';
+          await parsePhoneTagsAndUpdateWorldbook(messageText);
+        }
+      } catch (error) {
+        console.warn('解析 phone 标签失败:', error);
       }
+
+      await loadDialoguesFromTavern();
+      // 不自动跳转到最新消息，保持用户播放位置（流式只是预加载资源）
       // 如果收到的消息ID与正在流式加载的消息ID匹配，清除流式状态
-      if (streamingMessageId.value === messageId) {
+      if (!Number.isNaN(messageIdNum) && streamingMessageId.value === messageIdNum) {
         isStreaming.value = false;
         streamingText.value = '';
         streamingMessageId.value = null;
@@ -1276,6 +1650,237 @@ function handleClick() {
   }
 }
 
+// 存储收到 AI 主动发送消息的联系人（用于显示未读标记）
+const unreadContacts = ref<Set<string>>(new Set());
+
+// 检查是否有未读消息
+const hasUnreadMessages = computed(() => {
+  if (typeof window !== 'undefined' && (window as any).getUnreadContacts) {
+    const unreadList = (window as any).getUnreadContacts() as string[];
+    return unreadList && unreadList.length > 0;
+  }
+  return false;
+});
+
+// 暴露函数给 TheaterPanel 获取未读联系人
+if (typeof window !== 'undefined') {
+  (window as any).getUnreadContacts = () => Array.from(unreadContacts.value);
+  (window as any).clearUnreadContact = (contactName: string) => {
+    unreadContacts.value.delete(contactName);
+  };
+}
+
+// 解析消息中的 <phone> 标签并更新世界书
+async function parsePhoneTagsAndUpdateWorldbook(messageText: string) {
+  // 匹配所有 <phone> 标签
+  const phoneRegex = /<phone>([\s\S]*?)<\/phone>/gi;
+  const phoneMatches = Array.from(messageText.matchAll(phoneRegex));
+
+  if (phoneMatches.length === 0) return;
+
+  // 记录收到 AI 主动发送消息的联系人
+  const aiSentContacts = new Set<string>();
+
+  try {
+    // 获取角色卡绑定的世界书
+    let targetWorldbookName: string | null = null;
+    try {
+      const charWorldbooks = getCharWorldbookNames('current');
+      targetWorldbookName = charWorldbooks.primary || charWorldbooks.additional[0] || null;
+    } catch (error) {
+      console.warn('获取角色卡世界书失败:', error);
+    }
+
+    // 如果没有角色卡世界书，使用默认世界书
+    if (!targetWorldbookName) {
+      targetWorldbookName = '开场界面-模型数据';
+    }
+
+    // 确保世界书存在
+    let worldbook: any[] = [];
+    try {
+      worldbook = await getWorldbook(targetWorldbookName);
+    } catch {
+      // 如果世界书不存在，创建它
+      await createOrReplaceWorldbook(targetWorldbookName, []);
+      worldbook = [];
+    }
+
+    // 解析每个 phone 标签
+    for (const match of phoneMatches) {
+      const phoneContent = match[1].trim();
+      if (!phoneContent) continue;
+
+      // 解析格式支持两种：
+      // 1. 用户发送的格式：与{{联系人}}的聊天：消息内容|时间
+      // 2. AI主动发送的格式：{{联系人}}：消息内容|时间
+      const lines = phoneContent.split('\n').filter(line => line.trim());
+      const contactMessages: Map<string, Array<{ speaker: string; content: string; time: string }>> = new Map();
+
+      for (const line of lines) {
+        // 先尝试匹配 AI 主动发送的格式：{{联系人}}：消息内容|时间
+        let lineMatch = line.match(/^(.+?)[：:](.+?)\|(.+)$/);
+        let contactName: string | null = null;
+        let speaker: string | null = null;
+        let content: string | null = null;
+        let time: string | null = null;
+
+        if (lineMatch) {
+          const potentialContact = lineMatch[1].trim();
+          const potentialContent = lineMatch[2].trim();
+          const potentialTime = lineMatch[3].trim();
+
+          // 判断是否是用户发送的格式（包含"与"和"的聊天"）
+          const userFormatMatch = potentialContact.match(/^与(.+?)的聊天$/);
+          if (userFormatMatch) {
+            // 用户发送格式：与{{联系人}}的聊天：消息内容|时间
+            contactName = userFormatMatch[1].trim();
+            content = potentialContent;
+            time = potentialTime;
+            // 判断发言者：如果内容中包含 {{user}} 或 <user>，则为用户消息
+            if (content.includes('{{user}}') || content.includes('<user>')) {
+              speaker = '{{user}}';
+              content = content.replace(/{{user}}|<user>/gi, '').trim();
+            } else {
+              speaker = contactName;
+            }
+          } else {
+            // AI 主动发送格式：{{联系人}}：消息内容|时间
+            // 判断是否是用户消息
+            if (potentialContact === '{{user}}' || potentialContact === '<user>') {
+              // 这是用户消息，但需要知道是发给哪个联系人的
+              // 由于没有联系人信息，跳过这条消息（或者可以记录为"未指定"联系人）
+              continue;
+            }
+            // 这是联系人发送的消息（AI 主动发送）
+            contactName = potentialContact;
+            speaker = contactName;
+            content = potentialContent;
+            time = potentialTime;
+            // 记录收到 AI 主动发送消息的联系人
+            aiSentContacts.add(contactName);
+          }
+        } else {
+          // 尝试匹配格式2：与{{联系人}}的聊天|消息内容|时间
+          lineMatch = line.match(/^与(.+?)的聊天\|(.+?)\|(.+)$/);
+          if (lineMatch) {
+            contactName = lineMatch[1].trim();
+            content = lineMatch[2].trim();
+            time = lineMatch[3].trim();
+            speaker = '{{user}}'; // 这种格式通常是用户消息
+          }
+        }
+
+        // 如果解析成功，添加到对应联系人的消息列表
+        if (contactName && content && time && speaker) {
+          if (!contactMessages.has(contactName)) {
+            contactMessages.set(contactName, []);
+          }
+          contactMessages.get(contactName)!.push({
+            speaker,
+            content,
+            time,
+          });
+        }
+      }
+
+      // 为每个联系人更新世界书条目
+      for (const [contactName, messages] of contactMessages.entries()) {
+        const entryName = `与${contactName}的聊天记录`;
+
+        // 查找或创建条目
+        let entry = worldbook.find(e => e.name === entryName);
+
+        if (!entry) {
+          // 创建新条目
+          entry = {
+            name: entryName,
+            content: '',
+            comment: '',
+            priority: 100,
+            enabled: true,
+            insertion_order: 0,
+            case_sensitive: false,
+            name_regex: false,
+            content_regex: false,
+            exclude_recursion: false,
+            display_index: 0,
+            probability: 100,
+            delay: 0,
+            delay_on: 0,
+            delay_off: 0,
+            recursion: {
+              prevent_incoming: false,
+              prevent_outgoing: false,
+              delay_until: null,
+            },
+            position: {
+              before: [],
+              after: [],
+              order: 0,
+            },
+            disable: false,
+            exclude: false,
+            uid: Date.now().toString(),
+          };
+          worldbook.push(entry);
+        }
+
+        // 更新条目内容
+        const existingContent = entry.content || '';
+        const newLines = messages.map(msg => `${msg.speaker}：${msg.content}|${msg.time}`);
+        const updatedContent = existingContent ? `${existingContent}\n${newLines.join('\n')}` : newLines.join('\n');
+
+        entry.content = updatedContent;
+      }
+    }
+
+    // 更新世界书
+    if (worldbook.length > 0) {
+      await updateWorldbookWith(targetWorldbookName, () => worldbook);
+      console.info(`已更新世界书 ${targetWorldbookName} 中的聊天记录条目`);
+    }
+
+    // 更新未读联系人列表
+    if (aiSentContacts.size > 0) {
+      aiSentContacts.forEach(contact => {
+        unreadContacts.value.add(contact);
+      });
+      // 通知 TheaterPanel 更新未读标记
+      if (typeof window !== 'undefined' && (window as any).updateTheaterUnreadMarkers) {
+        (window as any).updateTheaterUnreadMarkers();
+      }
+    }
+  } catch (error) {
+    console.error('解析 phone 标签并更新世界书失败:', error);
+  }
+}
+
+// 获取小剧场的待发送消息并附加phone标签
+function getTheaterPhoneContent(): string {
+  if (typeof window !== 'undefined' && (window as any).getTheaterPendingMessages) {
+    return (window as any).getTheaterPendingMessages();
+  }
+  return '';
+}
+
+// 统一的消息发送函数，自动附加phone标签（只针对小剧场输入的内容）
+async function sendUserMessageWithPhone(messageText: string) {
+  const phoneContent = getTheaterPhoneContent();
+  // 只有当有小剧场输入内容时才附加phone标签，且只包裹小剧场的内容
+  const finalMessage = phoneContent ? `${messageText}\n\n${phoneContent}` : messageText;
+
+  await createChatMessages(
+    [
+      {
+        role: 'user',
+        message: finalMessage,
+      },
+    ],
+    { refresh: 'all' },
+  );
+}
+
 /**
  * 裁剪消息文本，在 </content> 标签之前停止
  */
@@ -1341,7 +1946,7 @@ async function handleSaveToStory(text: string) {
   }
 }
 
-// 裁剪选项文本：只保留被选择的选项，删除未选择的选项块
+// 裁剪选项文本：只保留被选择的选项，删除未选择的选项块，并记录用户选择
 async function trimChoiceText(messageId: number, selectedText: string): Promise<void> {
   try {
     const messages = getChatMessages(messageId);
@@ -1366,6 +1971,9 @@ async function trimChoiceText(messageId: number, selectedText: string): Promise<
       allChoiceBlocks.push({ block: choiceBlock, parts });
     }
 
+    // 获取当前场景（用于user消息格式）
+    const currentScene = currentDialogue.value?.scene || '{{scene}}';
+
     // 处理新格式：[[choice||选项1||角色名||台词]]
     const newFormatBlocks = allChoiceBlocks.filter(cb => cb.parts.length >= 3);
     if (newFormatBlocks.length > 0) {
@@ -1380,6 +1988,20 @@ async function trimChoiceText(messageId: number, selectedText: string): Promise<
       }
       // 清理多余的空行
       newMessageText = newMessageText.replace(/\n\s*\n/g, '\n').trim();
+
+      // 将选择的选项转换为user消息格式并添加到消息中
+      // 查找 <content> 标签，如果存在则在其中添加，否则在末尾添加
+      const contentMatch = newMessageText.match(/<content>([\s\S]*?)<\/content>/i);
+      if (contentMatch) {
+        // 在 <content> 标签内添加user消息
+        const contentText = contentMatch[1];
+        const userMessage = `\n[[user||场景：${currentScene}||台词：${selectedText}]]`;
+        const newContentText = contentText + userMessage;
+        newMessageText = newMessageText.replace(contentMatch[0], `<content>${newContentText}</content>`);
+      } else {
+        // 在消息末尾添加user消息
+        newMessageText = newMessageText + `\n\n[[user||场景：${currentScene}||台词：${selectedText}]]`;
+      }
     } else {
       // 处理旧格式：[[choice||选项1||选项2||选项3]]
       const oldFormatBlocks = allChoiceBlocks.filter(cb => cb.parts.length < 3 && cb.parts.length > 0);
@@ -1391,6 +2013,17 @@ async function trimChoiceText(messageId: number, selectedText: string): Promise<
           newMessageText = newMessageText.replace(choiceBlock.block, trimmedChoiceBlock);
           console.info('已裁剪选项文本（旧格式），只保留被选择的选项:', selectedText);
         }
+      }
+
+      // 将选择的选项转换为user消息格式并添加到消息中
+      const contentMatch = newMessageText.match(/<content>([\s\S]*?)<\/content>/i);
+      if (contentMatch) {
+        const contentText = contentMatch[1];
+        const userMessage = `\n[[user||场景：${currentScene}||台词：${selectedText}]]`;
+        const newContentText = contentText + userMessage;
+        newMessageText = newMessageText.replace(contentMatch[0], `<content>${newContentText}</content>`);
+      } else {
+        newMessageText = newMessageText + `\n\n[[user||场景：${currentScene}||台词：${selectedText}]]`;
       }
     }
 
@@ -1405,7 +2038,7 @@ async function trimChoiceText(messageId: number, selectedText: string): Promise<
         ],
         { refresh: 'none' }, // 不刷新界面
       );
-      console.info('已更新消息文本（不刷新界面）');
+      console.info('已更新消息文本（记录用户选择）:', selectedText);
     }
   } catch (error) {
     console.error('裁剪选项文本失败:', error);
@@ -1513,16 +2146,8 @@ async function handleChoiceSelect(id: string, customText?: string) {
         }
       }
 
-      // 发送用户输入的消息
-      await createChatMessages(
-        [
-          {
-            role: 'user',
-            message: messageText,
-          },
-        ],
-        { refresh: 'all' },
-      );
+      // 发送用户输入的消息（自动附加phone标签）
+      await sendUserMessageWithPhone(messageText);
       console.info('已发送用户消息:', messageText);
 
       // 准备流式界面：立即开始监听流式token
@@ -1535,20 +2160,8 @@ async function handleChoiceSelect(id: string, customText?: string) {
       await triggerSlash('/trigger');
       console.info('已触发 AI 生成');
 
-      // 重新加载对话数据
+      // 重新加载对话数据（不自动跳转，保持用户播放位置）
       await loadDialoguesFromTavern();
-
-      // 跳转到最新对话（如果有新消息）
-      nextTick(() => {
-        if (dialogues.value.length > 0) {
-          const newMessage = dialogues.value.find(d => d.message_id === expectedMessageId);
-          if (newMessage) {
-            currentDialogIndex.value = dialogues.value.indexOf(newMessage);
-          } else {
-            currentDialogIndex.value = dialogues.value.length - 1;
-          }
-        }
-      });
     }
 
     // 演出中：带角色回复的选项（格式1）会继续剧情演出，不触发 AI 回复
@@ -1615,20 +2228,8 @@ async function handleChoiceSelect(id: string, customText?: string) {
       await triggerSlash('/trigger');
       console.info('已触发 AI 生成（自定义输入）');
 
-      // 重新加载对话数据
+      // 重新加载对话数据（不自动跳转，保持用户播放位置）
       await loadDialoguesFromTavern();
-
-      // 跳转到最新对话
-      nextTick(() => {
-        if (dialogues.value.length > 0) {
-          const newMessage = dialogues.value.find(d => d.message_id === expectedMessageId);
-          if (newMessage) {
-            currentDialogIndex.value = dialogues.value.indexOf(newMessage);
-          } else {
-            currentDialogIndex.value = dialogues.value.length - 1;
-          }
-        }
-      });
     } else if (!isAllDialoguesLoaded) {
       // 普通选项：只显示角色回复，不删除后续对话，不触发 AI 回复
       // 继续下一条对话
@@ -1859,6 +2460,23 @@ function handleCharacterClick() {
   }
 }
 
+function handleTheaterClick() {
+  showTheaterPanel.value = true;
+  characterMenuExpanded.value = false;
+}
+
+// 快速打开小剧场并展开联系人列表
+function handleQuickTheaterClick() {
+  showTheaterPanel.value = true;
+  characterMenuExpanded.value = false;
+  // 通知 TheaterPanel 展开联系人列表
+  nextTick(() => {
+    if (typeof window !== 'undefined' && (window as any).openTheaterContacts) {
+      (window as any).openTheaterContacts();
+    }
+  });
+}
+
 function handleInputClick() {
   showInputBox.value = true;
   characterMenuExpanded.value = false;
@@ -1952,15 +2570,8 @@ async function handleSendInput() {
     // 使用新格式格式化用户消息
     const formattedMessage = `[[user||场景：${currentScene}||台词：${text}]]`;
 
-    await createChatMessages(
-      [
-        {
-          role: 'user',
-          message: formattedMessage,
-        },
-      ],
-      { refresh: 'all' }, // 刷新界面以触发 AI 回复
-    );
+    // 发送用户消息（自动附加phone标签）
+    await sendUserMessageWithPhone(formattedMessage);
     console.info('已发送用户消息:', text);
 
     // 准备流式界面：立即开始监听流式token
@@ -1973,20 +2584,8 @@ async function handleSendInput() {
     await triggerSlash('/trigger');
     console.info('已触发 AI 生成');
 
-    // 重新加载对话数据
+    // 重新加载对话数据（不自动跳转，保持用户播放位置）
     await loadDialoguesFromTavern();
-
-    // 跳转到最新对话（如果有新消息）
-    nextTick(() => {
-      if (dialogues.value.length > 0) {
-        const newMessage = dialogues.value.find(d => d.message_id === expectedMessageId);
-        if (newMessage) {
-          currentDialogIndex.value = dialogues.value.indexOf(newMessage);
-        } else {
-          currentDialogIndex.value = dialogues.value.length - 1;
-        }
-      }
-    });
   } catch (error) {
     console.error('发送消息失败:', error);
     isStreaming.value = false;

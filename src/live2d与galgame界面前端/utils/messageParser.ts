@@ -16,8 +16,8 @@ import type { MessageBlock, StatusBlockData } from '../types/message';
  * 世界书资源缓存
  */
 interface WorldbookResourceCache {
-  models: Map<string, ModelResourceWorldbookData>; // 角色名 -> 模型数据
-  sprites: Map<string, SpriteResourceWorldbookData>; // 角色名 -> 立绘数据
+  models: Map<string, ModelResourceWorldbookData>; // modelName -> 模型数据
+  sprites: SpriteResourceWorldbookData | null; // 立绘资源（合并所有立绘到一个对象中，类似背景和CG）
   backgrounds: BackgroundResourceWorldbookData | null;
   cgs: CGResourceWorldbookData | null;
 }
@@ -57,7 +57,7 @@ export async function loadWorldbookResources(): Promise<WorldbookResourceCache> 
 
   const cache: WorldbookResourceCache = {
     models: new Map(),
-    sprites: new Map(),
+    sprites: null,
     backgrounds: null,
     cgs: null,
   };
@@ -80,14 +80,28 @@ export async function loadWorldbookResources(): Promise<WorldbookResourceCache> 
   }
 
   // 从所有世界书中加载资源
+  console.info('[世界书加载] 准备加载世界书:', worldbookNames);
   for (const worldbookName of worldbookNames) {
     try {
+      // 检查 getWorldbook 函数是否存在
+      if (typeof getWorldbook !== 'function') {
+        console.warn('[世界书加载] getWorldbook 函数不存在，可能不在酒馆环境中');
+        continue;
+      }
+
       const entries = await getWorldbook(worldbookName);
+      console.info(`[世界书加载] 从 ${worldbookName} 获取到 ${entries.length} 个条目`);
+
       for (const entry of entries) {
         if (!entry.enabled) continue;
 
         const data = parseWorldbookJsonData(entry.content);
-        if (!data) continue;
+        if (!data) {
+          console.warn(`[世界书加载] 无法解析条目: ${entry.name}`);
+          continue;
+        }
+
+        console.info(`[世界书加载] 解析条目: ${entry.name}, type=${data.type}`);
 
         if (data.type === 'live2d_model') {
           const modelData = data as ModelResourceWorldbookData;
@@ -96,13 +110,23 @@ export async function loadWorldbookResources(): Promise<WorldbookResourceCache> 
             cache.models.set(modelData.modelName, modelData);
           }
         } else if (data.type === 'sprite') {
+          // 立绘资源合并（不覆盖），完全和背景、CG一样
           const spriteData = data as SpriteResourceWorldbookData;
-          if (spriteData.characterName) {
-            // 如果已存在同名角色立绘，保留第一个（角色卡绑定的优先）
-            if (!cache.sprites.has(spriteData.characterName)) {
-              cache.sprites.set(spriteData.characterName, spriteData);
+          console.info(`[立绘加载] 发现立绘资源条目，包含 ${spriteData.sprites?.length || 0} 个立绘`);
+          if (spriteData.sprites && spriteData.sprites.length > 0) {
+            // 打印所有立绘的关键词
+            for (const sprite of spriteData.sprites) {
+              console.info(`[立绘加载] 立绘: ${sprite.name}, textMappings: ${sprite.textMappings?.join(', ')}`);
             }
           }
+          if (!cache.sprites) {
+            cache.sprites = spriteData;
+          } else {
+            const existing = cache.sprites;
+            const newData = spriteData;
+            existing.sprites.push(...newData.sprites);
+          }
+          console.info('[立绘加载] 合并立绘资源，当前总数:', cache.sprites.sprites.length);
         } else if (data.type === 'background') {
           // 背景资源合并（不覆盖）
           if (!cache.backgrounds) {
@@ -131,6 +155,15 @@ export async function loadWorldbookResources(): Promise<WorldbookResourceCache> 
   worldbookCache = cache;
   worldbookCacheTimestamp = now;
   worldbookCacheSource = currentCharacterName;
+
+  // 打印最终缓存状态
+  console.info('[世界书加载] 加载完成，缓存状态:', {
+    模型数量: cache.models.size,
+    立绘数量: cache.sprites?.sprites?.length || 0,
+    背景数量: cache.backgrounds?.backgrounds?.length || 0,
+    CG数量: cache.cgs?.cgs?.length || 0,
+  });
+
   return cache;
 }
 
@@ -236,34 +269,62 @@ async function matchWorldbookResources(
       }
     }
 
-    // 匹配立绘（需要角色名）
-    if (characterName && resources.sprites.has(characterName)) {
-      const spriteData = resources.sprites.get(characterName)!;
-      // 使用动作或表情文本来匹配立绘（不包括台词部分）
-      const matchTexts = [motionText, expressionText].filter(Boolean) as string[];
-      for (const sprite of spriteData.sprites) {
-        if (
-          sprite.textMappings?.some(mapping => matchTexts.some(text => fuzzyMatch(mapping, text))) ||
-          matchTexts.some(text => fuzzyMatch(sprite.name, text))
-        ) {
+    // 匹配立绘：完全和背景、CG一样的实现方式
+    if (characterName && resources.sprites) {
+      const matchText = characterName;
+      console.info('[立绘匹配] 开始匹配立绘，角色名:', characterName, '可用立绘数量:', resources.sprites.sprites.length);
+      for (const sprite of resources.sprites.sprites) {
+        // 匹配顺序：先匹配 textMappings，再匹配 name（和背景、CG完全一致）
+        // 注意：这里使用 || 运算符，所以先检查 textMappings，如果匹配就返回 true
+        const textMappingMatch = sprite.textMappings?.some(mapping => fuzzyMatch(mapping, matchText));
+        const nameMatch = fuzzyMatch(sprite.name, matchText);
+        if (textMappingMatch || nameMatch) {
           result.spriteImageUrl = sprite.file;
+          console.info(
+            '[立绘匹配] 匹配成功! sprite:',
+            sprite.name,
+            'textMappings匹配:',
+            textMappingMatch,
+            'name匹配:',
+            nameMatch,
+            'URL:',
+            sprite.file,
+          );
           break;
         }
       }
+      if (!result.spriteImageUrl) {
+        console.warn('[立绘匹配] 未找到匹配的立绘，角色名:', characterName);
+      }
     }
 
-    // 匹配动作和表情（需要角色名和模型数据）
-    if (characterName && resources.models.has(characterName)) {
-      const modelData = resources.models.get(characterName)!;
+    // 匹配Live2D模型和动作表情：通过textMappings匹配character块中除了台词之外的所有文本
+    // 收集所有需要匹配的文本（角色名、场景、动作、表情）
+    const modelMatchTexts: string[] = [];
+    if (characterName) modelMatchTexts.push(characterName);
+    if (sceneText) modelMatchTexts.push(sceneText);
+    if (motionText) modelMatchTexts.push(motionText);
+    if (expressionText) modelMatchTexts.push(expressionText);
 
+    // 遍历所有模型资源，通过modelName或textMappings匹配
+    let matchedModelData: ModelResourceWorldbookData | null = null;
+    for (const [modelName, modelData] of resources.models.entries()) {
+      // 检查modelName是否匹配任何关键词
+      if (modelMatchTexts.some(text => fuzzyMatch(modelName, text))) {
+        matchedModelData = modelData;
+        break;
+      }
+    }
+
+    if (matchedModelData) {
       // 匹配动作
       if (motionText) {
         // 先通过文本映射匹配
-        if (modelData.textMappings?.motion) {
-          for (const [file, mappingText] of Object.entries(modelData.textMappings.motion)) {
+        if (matchedModelData.textMappings?.motion) {
+          for (const [file, mappingText] of Object.entries(matchedModelData.textMappings.motion)) {
             if (fuzzyMatch(mappingText, motionText)) {
               // 找到匹配的映射，查找对应的动作文件
-              const motion = (modelData.motions || []).find(m => m.file === file || m.name === file);
+              const motion = (matchedModelData.motions || []).find(m => m.file === file || m.name === file);
               if (motion) {
                 result.motionFile = motion.file;
                 break;
@@ -273,7 +334,7 @@ async function matchWorldbookResources(
         }
         // 如果没有通过映射匹配到，再通过文件名匹配
         if (!result.motionFile) {
-          for (const motion of modelData.motions || []) {
+          for (const motion of matchedModelData.motions || []) {
             if (fuzzyMatch(motion.name, motionText) || fuzzyMatch(motion.file, motionText)) {
               result.motionFile = motion.file;
               break;
@@ -285,11 +346,11 @@ async function matchWorldbookResources(
       // 匹配表情
       if (expressionText) {
         // 先通过文本映射匹配
-        if (modelData.textMappings?.expression) {
-          for (const [file, mappingText] of Object.entries(modelData.textMappings.expression)) {
+        if (matchedModelData.textMappings?.expression) {
+          for (const [file, mappingText] of Object.entries(matchedModelData.textMappings.expression)) {
             if (fuzzyMatch(mappingText, expressionText)) {
               // 找到匹配的映射，查找对应的表情文件
-              const expression = (modelData.expressions || []).find(e => e.file === file || e.name === file);
+              const expression = (matchedModelData.expressions || []).find(e => e.file === file || e.name === file);
               if (expression) {
                 result.expressionFile = expression.file;
                 break;
@@ -299,7 +360,7 @@ async function matchWorldbookResources(
         }
         // 如果没有通过映射匹配到，再通过文件名匹配
         if (!result.expressionFile) {
-          for (const expression of modelData.expressions || []) {
+          for (const expression of matchedModelData.expressions || []) {
             if (fuzzyMatch(expression.name, expressionText) || fuzzyMatch(expression.file, expressionText)) {
               result.expressionFile = expression.file;
               break;
@@ -392,30 +453,92 @@ export async function parseMessageBlocks(message: string, lastScene?: string): P
       // 解析键值对格式
       const kvPairs = parseKeyValuePairs(content);
 
+      // 检查角色名是否为 <user>，如果是则转换为 user 类型
+      const characterName = kvPairs['角色名'] || kvPairs['character'] || '';
+      if (characterName === '<user>' || characterName === '{{user}}' || characterName.toLowerCase() === 'user') {
+        // 转换为 user 类型
+        const scene = kvPairs['场景'] || kvPairs['scene'] || currentScene;
+        let messageText = kvPairs['台词'] || kvPairs['台词内容'] || kvPairs['text'] || content;
+
+        // 处理用户输入中的特殊格式：
+        // *星号包裹* 表示内心想法（保留原格式，用于显示时格式化）
+        // 【】包裹 表示旁白（需要单独解析）
+        const narrationRegex = /【([^】]+)】/g;
+
+        // 检查是否有旁白（【】包裹的内容）
+        const narrationMatches: string[] = [];
+        let narrationMatch;
+        while ((narrationMatch = narrationRegex.exec(messageText)) !== null) {
+          narrationMatches.push(narrationMatch[1]);
+        }
+
+        // 移除旁白部分，保留其他内容
+        messageText = messageText.replace(narrationRegex, '').trim();
+
+        // 更新当前场景
+        if (scene) {
+          currentScene = scene;
+        }
+
+        // 如果有旁白，先创建旁白块
+        for (const narrationText of narrationMatches) {
+          const narrationBlock: MessageBlock = {
+            type: 'narration',
+            scene,
+            message: narrationText,
+          };
+
+          // 匹配背景资源
+          if (scene) {
+            const resources = await matchWorldbookResources(undefined, scene, undefined, undefined, undefined);
+            if (resources.sceneImageUrl) {
+              narrationBlock.sceneImageUrl = resources.sceneImageUrl;
+            }
+          }
+
+          blocks.push(narrationBlock);
+        }
+
+        // 创建用户消息块
+        const block: MessageBlock = {
+          type: 'user',
+          scene,
+          message: messageText,
+        };
+
+        // 匹配背景资源
+        if (scene) {
+          const resources = await matchWorldbookResources(undefined, scene, undefined, undefined, undefined);
+          if (resources.sceneImageUrl) {
+            block.sceneImageUrl = resources.sceneImageUrl;
+          }
+        }
+
+        blocks.push(block);
+        continue;
+      }
+
       const block: MessageBlock = {
         type: 'character',
       };
 
       // 新格式：[[character||角色名：程北极||场景：家中||动作：抱胸||表情：生气||台词：你怎么这样！]]
-      block.character = kvPairs['角色名'] || kvPairs['character'] || '';
+      block.character = characterName;
 
-      // 检查是否有CG场景
+      // 检查是否有CG场景（只有明确指定CG场景时才进入CG模式）
       const cgScene = kvPairs['CG场景'] || kvPairs['cg场景'] || kvPairs['CG'] || kvPairs['cg'];
       if (cgScene) {
+        // CG模式：使用CG场景，不显示立绘和模型
         block.scene = cgScene;
         block.text = kvPairs['台词'] || kvPairs['text'] || '';
         block.isCG = true;
       } else {
-        // 普通格式
+        // 普通模式：使用场景、动作、表情，可以显示立绘和模型
         block.scene = kvPairs['场景'] || kvPairs['scene'] || currentScene;
         block.motion = kvPairs['动作'] || kvPairs['motion'] || '';
         block.expression = kvPairs['表情'] || kvPairs['expression'] || '';
         block.text = kvPairs['台词'] || kvPairs['text'] || '';
-
-        // 如果没有动作和表情，进入CG模式
-        if (!block.motion && !block.expression) {
-          block.isCG = true;
-        }
+        block.isCG = false; // 明确设置为 false，表示普通模式
       }
 
       // 如果没有解析到场景，使用继承的场景
@@ -488,7 +611,6 @@ export async function parseMessageBlocks(message: string, lastScene?: string): P
       // 处理用户输入中的特殊格式：
       // *星号包裹* 表示内心想法（保留原格式，用于显示时格式化）
       // 【】包裹 表示旁白（需要单独解析）
-      const thoughtRegex = /\*([^*]+)\*/g;
       const narrationRegex = /【([^】]+)】/g;
 
       // 检查是否有旁白（【】包裹的内容）
@@ -587,11 +709,65 @@ export async function parseMessageBlocks(message: string, lastScene?: string): P
     }
   }
 
+  // 解析以 > 开头的文本块（小纸条）
+  // 先移除所有 [[type||...]] 格式的块，避免误解析
+  let remainingText = contentText;
+  const blockMatches = Array.from(contentText.matchAll(/\[\[(\w+)\|\|([^\]]*)\]\]/g));
+  for (const match of blockMatches) {
+    remainingText = remainingText.replace(match[0], '');
+  }
+
+  // 查找所有以 > 开头的连续行
+  const lines = remainingText.split('\n');
+  const noteLines: string[] = [];
+  let inNoteBlock = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+
+    // 检查是否以 > 开头
+    if (trimmedLine.startsWith('> ')) {
+      // 移除 > 前缀，保留后续内容
+      const noteLine = trimmedLine.substring(2);
+      noteLines.push(noteLine);
+      inNoteBlock = true;
+    } else if (inNoteBlock && trimmedLine === '') {
+      // 空行继续保留在块中（用于保持格式）
+      noteLines.push('');
+    } else if (inNoteBlock && !trimmedLine.startsWith('> ')) {
+      // 遇到非 > 开头的非空行，结束当前块
+      if (noteLines.length > 0) {
+        const noteContent = noteLines.join('\n').trim();
+        if (noteContent) {
+          blocks.push({
+            type: 'note',
+            noteContent,
+          });
+        }
+        noteLines.length = 0;
+      }
+      inNoteBlock = false;
+    }
+  }
+
+  // 处理最后一个块（如果存在）
+  if (noteLines.length > 0) {
+    const noteContent = noteLines.join('\n').trim();
+    if (noteContent) {
+      blocks.push({
+        type: 'note',
+        noteContent,
+      });
+    }
+  }
+
   return blocks;
 }
 
 /**
  * 检查角色是否有对应的动作和表情文件
+ * 支持通过文件名或文本描述（通过textMappings）匹配
  */
 export function hasMotionAndExpression(
   characterName: string,
@@ -610,10 +786,35 @@ export function hasMotionAndExpression(
 
   // 检查是否有动作
   if (motion) {
-    const hasMotion = model.motions?.some((m: any) => {
+    let hasMotion = false;
+
+    // 先检查是否是文件名（直接匹配）
+    hasMotion = model.motions?.some((m: any) => {
       const motionName = typeof m === 'string' ? m : m.name || m.file;
       return motionName === motion || motionName === `${motion}.motion3.json`;
     });
+
+    // 如果不是文件名，尝试通过textMappings匹配文本描述
+    if (!hasMotion && model.textMappings?.motion) {
+      for (const [file, mappingText] of Object.entries(model.textMappings.motion)) {
+        // 使用模糊匹配
+        const normalizedMotion = normalizeText(motion);
+        const normalizedMapping = normalizeText(String(mappingText));
+        if (
+          normalizedMotion === normalizedMapping ||
+          normalizedMotion.includes(normalizedMapping) ||
+          normalizedMapping.includes(normalizedMotion)
+        ) {
+          // 检查该文件是否在motions中
+          hasMotion = model.motions?.some((m: any) => {
+            const motionFile = typeof m === 'string' ? m : m.file;
+            return motionFile === file || motionFile === `${file}.motion3.json`;
+          });
+          if (hasMotion) break;
+        }
+      }
+    }
+
     if (!hasMotion) {
       return false;
     }
@@ -621,10 +822,35 @@ export function hasMotionAndExpression(
 
   // 检查是否有表情
   if (expression) {
-    const hasExpression = model.expressions?.some((e: any) => {
+    let hasExpression = false;
+
+    // 先检查是否是文件名（直接匹配）
+    hasExpression = model.expressions?.some((e: any) => {
       const exprName = typeof e === 'string' ? e : e.name || e.file;
       return exprName === expression || exprName === `${expression}.exp3.json`;
     });
+
+    // 如果不是文件名，尝试通过textMappings匹配文本描述
+    if (!hasExpression && model.textMappings?.expression) {
+      for (const [file, mappingText] of Object.entries(model.textMappings.expression)) {
+        // 使用模糊匹配
+        const normalizedExpression = normalizeText(expression);
+        const normalizedMapping = normalizeText(String(mappingText));
+        if (
+          normalizedExpression === normalizedMapping ||
+          normalizedExpression.includes(normalizedMapping) ||
+          normalizedMapping.includes(normalizedExpression)
+        ) {
+          // 检查该文件是否在expressions中
+          hasExpression = model.expressions?.some((e: any) => {
+            const exprFile = typeof e === 'string' ? e : e.file;
+            return exprFile === file || exprFile === `${file}.exp3.json`;
+          });
+          if (hasExpression) break;
+        }
+      }
+    }
+
     if (!hasExpression) {
       return false;
     }

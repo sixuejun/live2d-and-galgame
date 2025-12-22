@@ -96,12 +96,20 @@
 
         <!-- 文字内容 -->
         <div
-          :class="['leading-relaxed', isNarration ? 'italic text-center' : '']"
+          :class="[
+            'leading-relaxed',
+            isNarration
+              ? isLongNarration
+                ? 'italic text-center' // 长文本时，文本内容水平居中，容器从顶部开始
+                : 'italic text-center flex items-center justify-center' // 短文本时，垂直居中显示
+              : '',
+          ]"
           :style="{
             color: isNarration ? dialogStyle.colors.narrationText : dialogStyle.colors.dialogText,
             fontSize: `${dialogStyle.fontSize}px`,
             paddingLeft: isInnerArrow ? '48px' : 0,
             paddingRight: isInnerArrow ? '48px' : 0,
+            minHeight: isNarration && !isLongNarration ? 'calc(100% - 24px)' : undefined, // 短文本时占满剩余高度以垂直居中
           }"
         >
           <span v-html="formatTextWithThoughts(displayedText)"></span>
@@ -264,6 +272,13 @@ const isNarration = computed(() => !props.character || props.character.trim() ==
 const isInnerArrow = computed(() => arrowShape.value.isInner);
 const isMinimalArrow = computed(() => arrowShape.value.type === 'minimal');
 const isPillShape = computed(() => dialogStyle.value.boxShape === 'pill');
+
+// 判断旁白文本是否过长，过长时应该从顶部开始显示（不使用垂直居中）
+const isLongNarration = computed(() => {
+  if (!isNarration.value) return false;
+  // 当文本长度超过80个字符时，认为是长文本，应该从顶部开始显示
+  return (props.text?.length || 0) > 80;
+});
 
 // 背景图案样式
 const getPatternStyle = computed((): Record<string, string> => {
