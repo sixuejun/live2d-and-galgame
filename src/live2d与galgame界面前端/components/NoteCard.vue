@@ -137,8 +137,9 @@ function startDrag(clientX: number, clientY: number) {
   const rect = noteCardRef.value?.getBoundingClientRect();
   if (rect) {
     dragOffset.value = {
-      x: clientX - rect.left - position.value.x,
-      y: clientY - rect.top - position.value.y,
+      // 使用可见位置直接计算偏移，避免重复减去 transform 导致拖动偏移
+      x: clientX - rect.left,
+      y: clientY - rect.top,
     };
   }
 

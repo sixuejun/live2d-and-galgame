@@ -48,7 +48,7 @@
       </div>
 
       <!-- 主体内容区域 -->
-      <div class="relative flex" style="height: calc(85vh - 140px); max-height: 400px">
+      <div class="panel-body relative flex">
         <!-- 联系人列表（左侧） -->
         <div v-if="showContacts" class="contacts-sidebar">
           <div class="contacts-header">联系人</div>
@@ -1338,6 +1338,11 @@ defineExpose({
   min-width: 0;
 }
 
+.panel-body {
+  height: auto;
+  max-height: 400px;
+}
+
 .display-wrapper {
   flex: 1;
   border: 1px solid rgba(165, 214, 167, 0.3);
@@ -1772,10 +1777,22 @@ defineExpose({
     max-width: 28rem;
   }
 
+  .theater-window {
+    max-height: none;
+    height: auto;
+  }
+
   .theater-window-fullscreen {
     width: 90%;
     max-width: 28rem; /* 在手机上使用更小的尺寸，与角色状态栏保持一致 */
     border-radius: 12px; /* 保留圆角，不完全占满屏幕 */
+    height: auto;
+    max-height: none;
+  }
+
+  .panel-body {
+    height: auto;
+    max-height: none;
   }
 }
 </style>

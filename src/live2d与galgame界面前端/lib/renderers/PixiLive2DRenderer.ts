@@ -51,6 +51,20 @@ export class PixiLive2DRenderer {
   private config: Live2DModelConfig | null = null;
 
   /**
+   * 获取当前显示尺寸（优先 renderer.screen，后备 canvas 尺寸）
+   */
+  private getDisplaySize(): { width: number; height: number } {
+    const screenWidth = this.app?.renderer?.screen?.width;
+    const screenHeight = this.app?.renderer?.screen?.height;
+    if (screenWidth && screenHeight) {
+      return { width: screenWidth, height: screenHeight };
+    }
+    const canvasWidth = this.canvas?.clientWidth || this.canvas?.offsetWidth || this.canvas?.width || 800;
+    const canvasHeight = this.canvas?.clientHeight || this.canvas?.offsetHeight || this.canvas?.height || 600;
+    return { width: canvasWidth, height: canvasHeight };
+  }
+
+  /**
    * 初始化渲染器
    */
   async init(canvas: HTMLCanvasElement): Promise<void> {
@@ -95,9 +109,13 @@ export class PixiLive2DRenderer {
       });
 
       console.info('[PixiLive2DRenderer] Pixi 应用创建成功', {
-        screenWidth: this.app.screen?.width,
-        screenHeight: this.app.screen?.height,
+        screenWidth: this.app.renderer?.screen?.width,
+        screenHeight: this.app.renderer?.screen?.height,
       });
+
+      if (!this.app.renderer?.screen) {
+        console.warn('[PixiLive2DRenderer] renderer.screen 不可用，后续将使用 canvas 尺寸作为后备');
+      }
 
       // 监听画布大小变化
       const resizeObserver = new ResizeObserver(() => {
@@ -151,24 +169,14 @@ export class PixiLive2DRenderer {
       // 设置模型锚点为底部中心，符合 Galgame 风格
       model.anchor.set(0.5, 1.0);
 
-      // 检查 app 和 screen 是否存在（防止在手机上初始化未完成时出错）
-      if (!this.app || !this.app.screen) {
-        console.warn('[PixiLive2DRenderer] app 或 screen 未初始化，使用 canvas 尺寸作为后备');
-        const canvasWidth = this.canvas?.clientWidth || 800;
-        const canvasHeight = this.canvas?.clientHeight || 600;
-        const baseScale = Math.min(canvasWidth / model.width, canvasHeight / model.height) * 0.3;
-        model.scale.set(baseScale);
-        model.x = canvasWidth / 2;
-        model.y = canvasHeight;
-      } else {
-        // 计算基础缩放（让模型完整显示在画布中）
-        const baseScale = Math.min(this.app.screen.width / model.width, this.app.screen.height / model.height) * 0.3;
-        model.scale.set(baseScale);
+      // 使用可用的显示尺寸（兼容 renderer.screen 未就绪的情况）
+      const { width: displayWidth, height: displayHeight } = this.getDisplaySize();
+      const baseScale = Math.min(displayWidth / model.width, displayHeight / model.height) * 0.3;
+      model.scale.set(baseScale);
 
-        // 默认位置：居中底部
-        model.x = this.app.screen.width / 2;
-        model.y = this.app.screen.height;
-      }
+      // 默认位置：居中底部
+      model.x = displayWidth / 2;
+      model.y = displayHeight;
 
       // 确保模型可见（alpha = 1）
       model.alpha = 1;
@@ -280,19 +288,11 @@ export class PixiLive2DRenderer {
       return;
     }
 
-    // 检查 screen 是否存在（防止在手机上初始化未完成时出错）
-    if (!this.app.screen) {
-      console.warn('[PixiLive2DRenderer] screen 未初始化，使用 canvas 尺寸作为后备');
-      const canvasWidth = this.canvas?.clientWidth || 800;
-      const canvasHeight = this.canvas?.clientHeight || 600;
-      // x, y 是 0-100 的百分比
-      this.model.x = (x / 100) * canvasWidth;
-      this.model.y = (y / 100) * canvasHeight;
-    } else {
-      // x, y 是 0-100 的百分比
-      this.model.x = (x / 100) * this.app.screen.width;
-      this.model.y = (y / 100) * this.app.screen.height;
-    }
+    const { width: displayWidth, height: displayHeight } = this.getDisplaySize();
+
+    // x, y 是 0-100 的百分比
+    this.model.x = (x / 100) * displayWidth;
+    this.model.y = (y / 100) * displayHeight;
   }
 
   /**
@@ -428,8 +428,9 @@ export class PixiLive2DRenderer {
   resize(width?: number, height?: number): void {
     if (!this.canvas || !this.app) return;
 
-    const displayWidth = width || this.canvas.clientWidth;
-    const displayHeight = height || this.canvas.clientHeight;
+    const fallback = this.getDisplaySize();
+    const displayWidth = width || this.canvas.clientWidth || fallback.width;
+    const displayHeight = height || this.canvas.clientHeight || fallback.height;
 
     this.app.renderer.resize(displayWidth, displayHeight);
 
