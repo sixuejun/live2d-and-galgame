@@ -109,11 +109,11 @@ function watch_tavern_helper(compiler: webpack.Compiler) {
 }
 
 let watcher: FSWatcher;
-  const execute = () => {
-    exec('pnpm dump', { cwd: import.meta.dirname });
+const execute = () => {
+  exec('pnpm dump', { cwd: import.meta.dirname });
   console.info('\x1b[36m[schema_dump]\x1b[0m 已将所有 schema.ts 转换为 schema.json');
-  };
-  const execute_debounced = _.debounce(execute, 500, { leading: true, trailing: false });
+};
+const execute_debounced = _.debounce(execute, 500, { leading: true, trailing: false });
 function dump_schema(compiler: webpack.Compiler) {
   if (!compiler.options.watch) {
     execute_debounced();
