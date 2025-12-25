@@ -57,20 +57,36 @@ export class PixiLive2DRenderer {
     if (this.isInitialized) return;
 
     try {
+      // 获取 canvas 尺寸（在手机上可能为 0，需要后备值）
+      const canvasWidth = canvas.clientWidth || canvas.offsetWidth || 800;
+      const canvasHeight = canvas.clientHeight || canvas.offsetHeight || 600;
+
       console.info('[PixiLive2DRenderer] 开始初始化，canvas:', {
         exists: !!canvas,
-        width: canvas?.width || canvas?.clientWidth,
-        height: canvas?.height || canvas?.clientHeight,
+        clientWidth: canvas.clientWidth,
+        clientHeight: canvas.clientHeight,
+        offsetWidth: canvas.offsetWidth,
+        offsetHeight: canvas.offsetHeight,
+        finalWidth: canvasWidth,
+        finalHeight: canvasHeight,
       });
+
+      // 如果 canvas 尺寸为 0，记录警告但继续初始化（使用后备值）
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+        console.warn('[PixiLive2DRenderer] Canvas 尺寸为 0，使用后备值:', {
+          width: canvasWidth,
+          height: canvasHeight,
+        });
+      }
 
       this.canvas = canvas;
 
-      // 创建 Pixi 应用实例
+      // 创建 Pixi 应用实例（使用后备值确保不为 0）
       this.app = new PIXI.Application({
         view: canvas,
         autoStart: true,
-        width: canvas.clientWidth,
-        height: canvas.clientHeight,
+        width: canvasWidth,
+        height: canvasHeight,
         backgroundColor: 0x000000,
         backgroundAlpha: 0,
         antialias: true,
@@ -78,7 +94,10 @@ export class PixiLive2DRenderer {
         autoDensity: true,
       });
 
-      console.info('[PixiLive2DRenderer] Pixi 应用创建成功');
+      console.info('[PixiLive2DRenderer] Pixi 应用创建成功', {
+        screenWidth: this.app.screen?.width,
+        screenHeight: this.app.screen?.height,
+      });
 
       // 监听画布大小变化
       const resizeObserver = new ResizeObserver(() => {
@@ -89,7 +108,16 @@ export class PixiLive2DRenderer {
       this.isInitialized = true;
       console.info('[PixiLive2DRenderer] 渲染器初始化成功');
     } catch (error) {
-      console.error('[PixiLive2DRenderer] 渲染器初始化失败:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[PixiLive2DRenderer] 渲染器初始化失败:', errorMessage);
+      if (errorStack) {
+        console.error('[PixiLive2DRenderer] 初始化错误堆栈:', errorStack);
+      }
+      console.error(
+        '[PixiLive2DRenderer] 初始化错误详情:',
+        JSON.stringify({ message: errorMessage, stack: errorStack }, null, 2),
+      );
       throw error;
     }
   }
@@ -123,13 +151,24 @@ export class PixiLive2DRenderer {
       // 设置模型锚点为底部中心，符合 Galgame 风格
       model.anchor.set(0.5, 1.0);
 
-      // 计算基础缩放（让模型完整显示在画布中）
-      const baseScale = Math.min(this.app.screen.width / model.width, this.app.screen.height / model.height) * 0.3;
-      model.scale.set(baseScale);
+      // 检查 app 和 screen 是否存在（防止在手机上初始化未完成时出错）
+      if (!this.app || !this.app.screen) {
+        console.warn('[PixiLive2DRenderer] app 或 screen 未初始化，使用 canvas 尺寸作为后备');
+        const canvasWidth = this.canvas?.clientWidth || 800;
+        const canvasHeight = this.canvas?.clientHeight || 600;
+        const baseScale = Math.min(canvasWidth / model.width, canvasHeight / model.height) * 0.3;
+        model.scale.set(baseScale);
+        model.x = canvasWidth / 2;
+        model.y = canvasHeight;
+      } else {
+        // 计算基础缩放（让模型完整显示在画布中）
+        const baseScale = Math.min(this.app.screen.width / model.width, this.app.screen.height / model.height) * 0.3;
+        model.scale.set(baseScale);
 
-      // 默认位置：居中底部
-      model.x = this.app.screen.width / 2;
-      model.y = this.app.screen.height;
+        // 默认位置：居中底部
+        model.x = this.app.screen.width / 2;
+        model.y = this.app.screen.height;
+      }
 
       // 确保模型可见（alpha = 1）
       model.alpha = 1;
@@ -241,9 +280,19 @@ export class PixiLive2DRenderer {
       return;
     }
 
-    // x, y 是 0-100 的百分比
-    this.model.x = (x / 100) * this.app.screen.width;
-    this.model.y = (y / 100) * this.app.screen.height;
+    // 检查 screen 是否存在（防止在手机上初始化未完成时出错）
+    if (!this.app.screen) {
+      console.warn('[PixiLive2DRenderer] screen 未初始化，使用 canvas 尺寸作为后备');
+      const canvasWidth = this.canvas?.clientWidth || 800;
+      const canvasHeight = this.canvas?.clientHeight || 600;
+      // x, y 是 0-100 的百分比
+      this.model.x = (x / 100) * canvasWidth;
+      this.model.y = (y / 100) * canvasHeight;
+    } else {
+      // x, y 是 0-100 的百分比
+      this.model.x = (x / 100) * this.app.screen.width;
+      this.model.y = (y / 100) * this.app.screen.height;
+    }
   }
 
   /**

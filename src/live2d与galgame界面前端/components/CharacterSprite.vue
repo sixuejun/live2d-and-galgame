@@ -283,12 +283,33 @@ async function loadLive2dModel() {
     }
   } catch (error) {
     console.error('[CharacterSprite] 加载 Live2D 模型失败:', error);
-    console.error('[CharacterSprite] 错误详情:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+    // 将错误对象转换为可读字符串（避免在手机上显示 [object Object]）
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorDetails = {
+      message: errorMessage,
+      stack: errorStack,
       modelId: props.live2dModelId,
       modelConfig: modelConfig ? { id: modelConfig.id, name: modelConfig.name } : null,
-    });
+      canvasInfo: live2dCanvasRef.value
+        ? {
+            width: live2dCanvasRef.value.clientWidth,
+            height: live2dCanvasRef.value.clientHeight,
+            offsetWidth: live2dCanvasRef.value.offsetWidth,
+            offsetHeight: live2dCanvasRef.value.offsetHeight,
+          }
+        : null,
+      rendererReady: live2dRenderer?.isReady() || false,
+    };
+    console.error('[CharacterSprite] 错误详情:', JSON.stringify(errorDetails, null, 2));
+    // 同时输出各个字段，方便调试
+    console.error('[CharacterSprite] 错误消息:', errorMessage);
+    if (errorStack) {
+      console.error('[CharacterSprite] 错误堆栈:', errorStack);
+    }
+    console.error('[CharacterSprite] 模型ID:', props.live2dModelId);
+    console.error('[CharacterSprite] Canvas 信息:', errorDetails.canvasInfo);
+    console.error('[CharacterSprite] 渲染器就绪:', errorDetails.rendererReady);
   }
 }
 
@@ -422,12 +443,58 @@ onMounted(async () => {
   // 初始化渲染器（无论当前是否需要显示 Live2D）
   if (!live2dRenderer) {
     try {
-      console.info('[CharacterSprite] 初始化 Pixi Live2D 渲染器');
+      // 检查 canvas 尺寸（在手机上可能为 0）
+      const canvas = live2dCanvasRef.value;
+      if (!canvas) {
+        console.error('[CharacterSprite] Canvas 元素不存在');
+        return;
+      }
+
+      const canvasWidth = canvas.clientWidth || canvas.offsetWidth || 800;
+      const canvasHeight = canvas.clientHeight || canvas.offsetHeight || 600;
+
+      console.info('[CharacterSprite] 初始化 Pixi Live2D 渲染器', {
+        canvasWidth,
+        canvasHeight,
+        clientWidth: canvas.clientWidth,
+        clientHeight: canvas.clientHeight,
+        offsetWidth: canvas.offsetWidth,
+        offsetHeight: canvas.offsetHeight,
+      });
+
+      // 如果 canvas 尺寸为 0，等待一帧后重试
+      if (canvasWidth === 0 || canvasHeight === 0) {
+        console.warn('[CharacterSprite] Canvas 尺寸为 0，等待一帧后重试');
+        await new Promise(resolve => requestAnimationFrame(() => resolve(undefined)));
+        await nextTick();
+
+        const retryWidth = canvas.clientWidth || canvas.offsetWidth || 800;
+        const retryHeight = canvas.clientHeight || canvas.offsetHeight || 600;
+        console.info('[CharacterSprite] 重试时 Canvas 尺寸:', {
+          width: retryWidth,
+          height: retryHeight,
+        });
+
+        if (retryWidth === 0 || retryHeight === 0) {
+          console.error('[CharacterSprite] Canvas 尺寸仍然为 0，无法初始化渲染器');
+          return;
+        }
+      }
+
       live2dRenderer = new PixiLive2DRenderer();
-      await live2dRenderer.init(live2dCanvasRef.value);
+      await live2dRenderer.init(canvas);
       console.info('[CharacterSprite] Pixi Live2D 渲染器初始化完成');
     } catch (error) {
-      console.error('[CharacterSprite] 渲染器初始化失败:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[CharacterSprite] 渲染器初始化失败:', errorMessage);
+      if (errorStack) {
+        console.error('[CharacterSprite] 初始化错误堆栈:', errorStack);
+      }
+      console.error(
+        '[CharacterSprite] 初始化错误详情:',
+        JSON.stringify({ message: errorMessage, stack: errorStack }, null, 2),
+      );
       return;
     }
   }

@@ -2264,10 +2264,27 @@ async function handleChoiceSelect(id: string, customText?: string) {
         d => d.isChoiceResponse && d.choiceParentId === choiceParentId && d.type !== 'user' && d.type !== 'choice',
       );
 
+      // 获取当前对话的背景信息，用于继承到演出单元3和4
+      const currentDialogueData = currentDialogue.value;
+      const inheritScene = currentDialogueData?.scene;
+      const inheritSceneImageUrl = currentDialogueData?.sceneImageUrl;
+      const inheritSprite = currentDialogueData?.sprite;
+      const inheritMotion = currentDialogueData?.motion;
+      const inheritExpression = currentDialogueData?.expression;
+      const inheritIsCG = currentDialogueData?.isCG;
+      const inheritCgImageUrl = currentDialogueData?.cgImageUrl;
+
       // 演出单元3：用户对话框（显示选项内容）
       if (existingUserDialogueIndex !== -1) {
         // 回溯：替换现有的用户对话框
         dialogues.value[existingUserDialogueIndex].text = messageText;
+        // 确保背景也被继承
+        if (inheritScene) {
+          dialogues.value[existingUserDialogueIndex].scene = inheritScene;
+        }
+        if (inheritSceneImageUrl) {
+          dialogues.value[existingUserDialogueIndex].sceneImageUrl = inheritSceneImageUrl;
+        }
       } else {
         // 首次选择：插入新的用户对话框
         const userDialogue: DialogueItem = {
@@ -2280,6 +2297,9 @@ async function handleChoiceSelect(id: string, customText?: string) {
           role: 'user',
           isChoiceResponse: true,
           choiceParentId: choiceParentId,
+          // 继承背景
+          scene: inheritScene,
+          sceneImageUrl: inheritSceneImageUrl,
         };
 
         // 插入到选项框后面
@@ -2299,6 +2319,28 @@ async function handleChoiceSelect(id: string, customText?: string) {
         // 回溯：替换现有的回复对话框
         dialogues.value[existingResponseDialogueIndex].character = responseCharacter;
         dialogues.value[existingResponseDialogueIndex].text = responseText;
+        // 确保背景也被继承
+        if (inheritScene) {
+          dialogues.value[existingResponseDialogueIndex].scene = inheritScene;
+        }
+        if (inheritSceneImageUrl) {
+          dialogues.value[existingResponseDialogueIndex].sceneImageUrl = inheritSceneImageUrl;
+        }
+        if (inheritSprite) {
+          dialogues.value[existingResponseDialogueIndex].sprite = { ...inheritSprite };
+        }
+        if (inheritMotion) {
+          dialogues.value[existingResponseDialogueIndex].motion = inheritMotion;
+        }
+        if (inheritExpression) {
+          dialogues.value[existingResponseDialogueIndex].expression = inheritExpression;
+        }
+        if (inheritIsCG !== undefined) {
+          dialogues.value[existingResponseDialogueIndex].isCG = inheritIsCG;
+        }
+        if (inheritCgImageUrl) {
+          dialogues.value[existingResponseDialogueIndex].cgImageUrl = inheritCgImageUrl;
+        }
       } else {
         // 首次选择：插入新的回复对话框
         const responseDialogue: DialogueItem = {
@@ -2314,6 +2356,14 @@ async function handleChoiceSelect(id: string, customText?: string) {
           role: 'assistant',
           isChoiceResponse: true,
           choiceParentId: choiceParentId,
+          // 继承背景和立绘状态
+          scene: inheritScene,
+          sceneImageUrl: inheritSceneImageUrl,
+          sprite: inheritSprite ? { ...inheritSprite } : undefined,
+          motion: inheritMotion,
+          expression: inheritExpression,
+          isCG: inheritIsCG,
+          cgImageUrl: inheritCgImageUrl,
         };
 
         // 插入到用户对话框后面

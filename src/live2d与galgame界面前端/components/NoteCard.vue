@@ -1,7 +1,14 @@
 <template>
-  <div v-if="content" ref="noteCardRef" class="note-card" :style="cardStyle" @mousedown="handleMouseDown">
+  <div
+    v-if="content"
+    ref="noteCardRef"
+    class="note-card"
+    :style="cardStyle"
+    @mousedown="handleMouseDown"
+    @touchstart="handleTouchStart"
+  >
     <!-- 关闭按钮 -->
-    <button class="note-close-btn" aria-label="关闭" @click.stop="handleClose">
+    <button class="note-close-btn" aria-label="关闭" @click.stop="handleClose" @touchend.stop="handleClose">
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
           d="M9 3L3 9M3 3L9 9"
@@ -109,22 +116,54 @@ function handleMouseDown(e: MouseEvent) {
     return;
   }
 
+  startDrag(e.clientX, e.clientY);
+  e.preventDefault();
+}
+
+function handleTouchStart(e: TouchEvent) {
+  if ((e.target as HTMLElement).closest('.note-close-btn')) {
+    return;
+  }
+
+  if (e.touches.length > 0) {
+    const touch = e.touches[0];
+    startDrag(touch.clientX, touch.clientY);
+    e.preventDefault();
+  }
+}
+
+function startDrag(clientX: number, clientY: number) {
   isDragging.value = true;
   const rect = noteCardRef.value?.getBoundingClientRect();
   if (rect) {
     dragOffset.value = {
-      x: e.clientX - rect.left - position.value.x,
-      y: e.clientY - rect.top - position.value.y,
+      x: clientX - rect.left - position.value.x,
+      y: clientY - rect.top - position.value.y,
     };
   }
 
   document.addEventListener('mousemove', handleMouseMove);
   document.addEventListener('mouseup', handleMouseUp);
-  e.preventDefault();
+  document.addEventListener('touchmove', handleTouchMove, { passive: false });
+  document.addEventListener('touchend', handleTouchEnd);
 }
 
 function handleMouseMove(e: MouseEvent) {
   if (!isDragging.value || !noteCardRef.value) return;
+  updatePosition(e.clientX, e.clientY);
+}
+
+function handleTouchMove(e: TouchEvent) {
+  if (!isDragging.value || !noteCardRef.value) return;
+  if (e.touches.length > 0) {
+    const touch = e.touches[0];
+    updatePosition(touch.clientX, touch.clientY);
+    e.preventDefault();
+  }
+}
+
+function updatePosition(clientX: number, clientY: number) {
+  if (!noteCardRef.value) return;
 
   // 获取父容器（GalgamePlayer 的容器）
   const container = noteCardRef.value.closest('.relative') || document.body;
@@ -132,8 +171,8 @@ function handleMouseMove(e: MouseEvent) {
   const cardRect = noteCardRef.value.getBoundingClientRect();
 
   // 计算新位置（相对于容器的位置）
-  const newX = e.clientX - containerRect.left - dragOffset.value.x;
-  const newY = e.clientY - containerRect.top - dragOffset.value.y;
+  const newX = clientX - containerRect.left - dragOffset.value.x;
+  const newY = clientY - containerRect.top - dragOffset.value.y;
 
   // 限制在容器内（允许部分超出，但尽量保持在可见区域）
   const maxX = Math.max(0, containerRect.width - cardRect.width);
@@ -146,9 +185,19 @@ function handleMouseMove(e: MouseEvent) {
 }
 
 function handleMouseUp() {
+  endDrag();
+}
+
+function handleTouchEnd() {
+  endDrag();
+}
+
+function endDrag() {
   isDragging.value = false;
   document.removeEventListener('mousemove', handleMouseMove);
   document.removeEventListener('mouseup', handleMouseUp);
+  document.removeEventListener('touchmove', handleTouchMove);
+  document.removeEventListener('touchend', handleTouchEnd);
 
   // 保存位置
   if (props.noteUnitId) {
@@ -163,6 +212,8 @@ function handleClose() {
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleMouseMove);
   document.removeEventListener('mouseup', handleMouseUp);
+  document.removeEventListener('touchmove', handleTouchMove);
+  document.removeEventListener('touchend', handleTouchEnd);
 });
 </script>
 

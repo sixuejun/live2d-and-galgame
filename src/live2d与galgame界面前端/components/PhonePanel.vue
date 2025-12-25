@@ -688,8 +688,29 @@ async function loadHistoryMessages(contact: string) {
 // 检查未读消息
 async function checkUnreadMessages() {
   try {
+    // 在第0层时（lastMessageId < 0），不检测历史记录，直接返回
+    const lastMessageId = typeof getLastMessageId === 'function' ? getLastMessageId() : -1;
+    if (lastMessageId < 0) {
+      // 第0层时 getChatMessages 错误是正常的，不检测历史记录
+      return;
+    }
+
     // 从最新的几条消息中查找 phone 标签
-    const chatMessages = getChatMessages('latest');
+    // 获取最后 5 条消息（从 lastMessageId - 4 到 lastMessageId）
+    const chatMessages: any[] = [];
+    try {
+      const startId = Math.max(0, lastMessageId - 4);
+      const endId = lastMessageId;
+      for (let i = endId; i >= startId; i--) {
+        const messages = getChatMessages(i);
+        if (messages.length > 0) {
+          chatMessages.unshift(...messages);
+        }
+      }
+    } catch (error) {
+      console.warn('[PhonePanel] 获取消息失败:', error);
+      return;
+    }
     const recentMessages = chatMessages.slice(-5);
 
     for (const msg of recentMessages) {
@@ -1082,9 +1103,9 @@ defineExpose({
 
 .theater-window-fullscreen {
   width: 90%;
-  max-width: 620px;
+  max-width: 32rem; /* 与角色状态栏保持一致 */
   max-height: none;
-  aspect-ratio: 620 / 450;
+  aspect-ratio: 32 / 23; /* 约等于 620/450 的比例，但更小 */
 }
 
 .title-bar {
@@ -1752,9 +1773,9 @@ defineExpose({
   }
 
   .theater-window-fullscreen {
-    width: 100%;
-    max-width: 100%;
-    border-radius: 0;
+    width: 90%;
+    max-width: 28rem; /* 在手机上使用更小的尺寸，与角色状态栏保持一致 */
+    border-radius: 12px; /* 保留圆角，不完全占满屏幕 */
   }
 }
 </style>
