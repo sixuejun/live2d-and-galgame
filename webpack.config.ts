@@ -534,7 +534,8 @@ function parse_configuration(entry: Entry): (_env: any, argv: any) => webpack.Co
       if (builtin.includes(request)) {
         return callback();
       }
-      if (argv.mode !== 'production' && ['vue', 'pixi'].some(key => request.includes(key))) {
+      // 关键依赖（vue / pixi / live2d）必须始终内联打包，避免生产环境缺少全局变量
+      if (['vue', 'pixi'].some(key => request.includes(key))) {
         return callback();
       }
       if (['react'].some(key => request.includes(key))) {
