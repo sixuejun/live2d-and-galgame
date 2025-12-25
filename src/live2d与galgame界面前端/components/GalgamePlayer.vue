@@ -774,23 +774,34 @@ const currentImageUrl = computed(() => {
 const currentLive2dModelId = computed(() => {
   const dialogue = currentDialogue.value;
   if (dialogue?.sprite?.live2dModelId) {
+    // dialogue.sprite.live2dModelId 是在创建 dialogue 时从世界书匹配得到的
+    // （通过 loadWorldbookResources() -> live2dModels.value -> 根据角色名匹配）
     console.info(
-      '[GalgamePlayer] currentLive2dModelId: 从 dialogue.sprite.live2dModelId 获取',
-      dialogue.sprite.live2dModelId,
+      '[GalgamePlayer] currentLive2dModelId: 使用已匹配的模型ID（来自世界书）',
+      {
+        modelId: dialogue.sprite.live2dModelId,
+        character: dialogue.character,
+        source: 'dialogue.sprite.live2dModelId (在创建dialogue时从世界书匹配)',
+      },
     );
     return dialogue.sprite.live2dModelId;
   }
-  // 自动匹配：根据角色名查找模型
+  // 自动匹配：根据角色名从世界书加载的模型列表中查找
   if (dialogue?.character) {
     const model = live2dModels.value.find(m => m.name === dialogue.character);
-    console.info('[GalgamePlayer] currentLive2dModelId: 自动匹配角色名', {
+    console.info('[GalgamePlayer] currentLive2dModelId: 从世界书模型列表中匹配角色名', {
       character: dialogue.character,
       foundModel: model ? { id: model.id, name: model.name } : null,
       availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+      source: 'live2dModels.value (从世界书加载)',
     });
     return model?.id;
   }
-  console.info('[GalgamePlayer] currentLive2dModelId: 未找到模型ID');
+  console.info('[GalgamePlayer] currentLive2dModelId: 未找到模型ID', {
+    hasDialogue: !!dialogue,
+    hasCharacter: !!dialogue?.character,
+    availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+  });
   return undefined;
 });
 
@@ -1078,11 +1089,17 @@ async function loadDialoguesFromTavern() {
                   const imageUrl = block.spriteImageUrl || msg.extra?.sprite_image || undefined;
 
                   // 优先使用 Live2D 模型（如果有）
+                  // live2dModel 是从世界书加载的 live2dModels.value 中根据角色名匹配得到的
                   if (live2dModel) {
-                    console.info('[对话创建] 使用 Live2D 模型:', block.character, 'modelId:', live2dModel.id);
+                    console.info('[对话创建] 从世界书匹配到 Live2D 模型:', {
+                      character: block.character,
+                      modelId: live2dModel.id,
+                      modelName: live2dModel.name,
+                      source: 'live2dModels.value (从世界书加载)',
+                    });
                     return {
                       type: 'live2d',
-                      live2dModelId: live2dModel.id,
+                      live2dModelId: live2dModel.id, // 这个值来自世界书
                       imageUrl: undefined,
                     };
                   }
