@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { StatusBlockData } from '../types/message';
 
 interface Props {

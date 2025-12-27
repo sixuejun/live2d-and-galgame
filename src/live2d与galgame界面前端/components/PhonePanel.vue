@@ -92,10 +92,21 @@
                 <span>加载历史记录...</span>
               </div>
               <!-- 消息气泡 -->
-              <div ref="chatLog" class="chat-log">
+              <div class="chat-log">
                 <template v-for="(message, index) in displayMessages" :key="index">
+                  <!-- 分割线（不生成气泡） -->
+                  <div
+                    v-if="message.content.match(/^\[与.+的聊天记录如下：\]$/)"
+                    class="text-muted-foreground my-4 flex items-center gap-3 px-4 text-xs select-none"
+                  >
+                    <div class="bg-border h-px flex-1"></div>
+                    <span class="whitespace-nowrap">
+                      {{ message.content.replace(/^\[|\]$/g, '') }}
+                    </span>
+                    <div class="bg-border h-px flex-1"></div>
+                  </div>
                   <!-- 消息容器（包含名字和气泡，但不共享背景） -->
-                  <div class="message-container" :class="message.isUser ? 'message-right' : 'message-left'">
+                  <div v-else class="message-container" :class="message.isUser ? 'message-right' : 'message-left'">
                     <!-- 发言者标签（独立于气泡，单独一行） -->
                     <div
                       v-if="!message.hideLabel"
@@ -132,17 +143,43 @@
 
           <!-- 输入栏 -->
           <div class="cmd-bar">
-            <input
-              v-model="inputText"
-              type="text"
-              class="cmd-input"
-              :disabled="isTyping || isLoading"
-              placeholder="输入消息..."
-              @keydown.enter="handleSendMessage"
-            />
+            <div class="cmd-input-wrapper">
+              <input
+                v-model="inputText"
+                type="text"
+                class="cmd-input"
+                :disabled="isTyping || isLoading || !currentContact"
+                :placeholder="currentContact ? '输入消息...' : '请先选择联系人'"
+              />
+              <button
+                v-if="currentContact"
+                class="cmd-newline-btn-inline"
+                title="回车换行（添加到聊天界面但不发送）"
+                :disabled="isTyping || isLoading || !inputText.trim()"
+                @click="handleEnterNewline"
+              >
+                <svg
+                  t="1766816834864"
+                  class="icon"
+                  viewBox="0 0 1024 1024"
+                  version="1.1"
+                  xmlns="http://www.w3.org/2000/svg"
+                  p-id="2650"
+                  width="16"
+                  height="16"
+                >
+                  <path
+                    d="M810.666667 213.333333a42.666667 42.666667 0 0 1 42.368 37.674667L853.333333 256v274.304c0 79.274667-50.944 147.498667-120.490666 152.106667L725.333333 682.666667H273.706667l97.792 97.834666a42.666667 42.666667 0 0 1-56.32 63.872l-4.010667-3.541333-170.666667-170.666667a42.666667 42.666667 0 0 1 0-60.330666l170.666667-170.666667a42.666667 42.666667 0 0 1 63.872 56.32l-3.541333 4.010667L273.706667 597.333333H725.333333c19.584 0 39.936-24.618667 42.410667-59.861333l0.256-7.168V256a42.666667 42.666667 0 0 1 42.666667-42.666667z"
+                    fill="currentColor"
+                    p-id="2651"
+                  ></path>
+                </svg>
+              </button>
+            </div>
             <button
               class="cmd-send-btn"
-              :disabled="isTyping || isLoading || !inputText.trim() || !currentContact"
+              title="发送消息并触发AI回复"
+              :disabled="isTyping || isLoading || !currentContact"
               @click="handleSendMessage"
             >
               <svg
@@ -169,6 +206,25 @@
             <button class="jade-btn" @click="autoPlay">▶ 自动播放</button>
             <button class="jade-btn" @click="playStep">⏯ 继续</button>
             <button class="jade-btn jade-btn-red" @click="reset">↺ 重置</button>
+            <button class="jade-btn jade-btn-red" title="结束" @click="handleEndPhoneMode">
+              <svg
+                t="1766144599366"
+                class="icon"
+                viewBox="0 0 1024 1024"
+                version="1.1"
+                xmlns="http://www.w3.org/2000/svg"
+                p-id="4447"
+                width="12"
+                height="12"
+              >
+                <path
+                  d="M886.784 746.496q29.696 30.72 43.52 56.32t-4.608 58.368q-4.096 6.144-11.264 14.848t-14.848 16.896-15.36 14.848-12.8 9.728q-25.6 15.36-60.416 8.192t-62.464-34.816l-43.008-43.008-57.344-57.344-67.584-67.584-73.728-73.728-131.072 131.072q-60.416 60.416-98.304 99.328-38.912 38.912-77.312 48.128t-68.096-17.408l-7.168-7.168-11.264-11.264-11.264-11.264q-6.144-6.144-7.168-8.192-11.264-14.336-13.312-29.184t2.56-29.184 13.824-27.648 20.48-24.576q9.216-8.192 32.768-30.72l55.296-57.344q33.792-32.768 75.264-73.728t86.528-86.016q-49.152-49.152-93.696-93.184t-79.872-78.848-57.856-56.832-27.648-27.136q-26.624-26.624-27.136-52.736t17.92-52.736q8.192-10.24 23.552-24.064t21.504-17.92q30.72-20.48 55.296-17.92t49.152 28.16l31.744 31.744q23.552 23.552 58.368 57.344t78.336 76.288 90.624 88.576q38.912-38.912 76.288-75.776t69.632-69.12 58.368-57.856 43.52-43.008q24.576-23.552 53.248-31.232t55.296 12.8q1.024 1.024 6.656 5.12t11.264 9.216 10.752 9.728 7.168 5.632q27.648 26.624 27.136 57.856t-27.136 57.856q-18.432 18.432-45.568 46.08t-60.416 60.416-70.144 69.632l-77.824 77.824q37.888 36.864 74.24 72.192t67.584 66.048 56.32 56.32 41.472 41.984z"
+                  p-id="4448"
+                  fill="currentColor"
+                ></path>
+              </svg>
+              结束
+            </button>
           </div>
         </div>
       </div>
@@ -201,6 +257,7 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { usePendingTextStore } from '../stores/pendingText';
 import type { StatusBlockData } from '../types/message';
 
 interface PhoneMessage {
@@ -219,6 +276,9 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+// 预发送文本 store
+const pendingTextStore = usePendingTextStore();
 
 // UI 状态
 const currentContact = ref<string | null>(null); // 当前选中的联系人
@@ -253,7 +313,6 @@ const hasLoadedHistory = ref<Set<string>>(new Set()); // 已加载历史记录�
 
 // DOM 引用
 const scrollContainer = ref<HTMLDivElement | null>(null);
-const chatLog = ref<HTMLDivElement | null>(null);
 
 // 从 localStorage 加载设置
 onMounted(() => {
@@ -505,12 +564,32 @@ function formatMessageContent(content: string): string {
 }
 
 // 选择联系人
-function selectContact(contact: string) {
+async function selectContact(contact: string) {
   currentContact.value = contact;
+
+  // 清空小剧场消息，切换到聊天模式
+  theaterMessages.value = [];
+  currentTheaterIndex.value = 0;
+  isAutoPlaying.value = false;
+  isTyping.value = false;
+
+  // 如果还没有加载历史记录，先加载
+  if (!hasLoadedHistory.value.has(contact)) {
+    await loadHistoryMessages(contact);
+  }
 
   // 加载该联系人的消息
   const messages = allMessages.value.get(contact) || [];
-  displayMessages.value = [...messages];
+
+  // 添加分割线作为第一条消息
+  const dividerMessage: PhoneMessage = {
+    speaker: '',
+    content: `[与${contact}的聊天记录如下：]`,
+    isUser: false,
+    hideLabel: true,
+  };
+
+  displayMessages.value = [dividerMessage, ...messages];
 
   // 清除未读标记
   unreadContacts.value.delete(contact);
@@ -520,31 +599,26 @@ function selectContact(contact: string) {
     scrollToBottom();
   });
 
-  // 如果还没有加载历史记录，尝试加载
-  if (!hasLoadedHistory.value.has(contact)) {
-    loadHistoryMessages(contact);
-  }
+  console.info('[PhonePanel] 已选择联系人:', contact);
 }
 
-// 获取联系人的最后一条消息
-function getLastMessage(contact: string): string {
-  const messages = allMessages.value.get(contact) || [];
-  if (messages.length === 0) return '暂无消息';
-  const lastMsg = messages[messages.length - 1];
-  return lastMsg.content.length > 20 ? lastMsg.content.substring(0, 20) + '...' : lastMsg.content;
-}
-
-// 发送消息
-function handleSendMessage() {
+// 回车换行（添加到聊天界面但不发送）
+function handleEnterNewline() {
   if (!inputText.value.trim() || !currentContact.value) return;
+
+  const text = inputText.value.trim();
+  const timestamp = getCurrentTime();
 
   const message: PhoneMessage = {
     speaker: '你',
-    content: inputText.value.trim(),
+    content: text,
     isUser: true,
     hideLabel: false,
-    timestamp: getCurrentTime(),
+    timestamp,
   };
+
+  // 添加到预发送文本 store
+  pendingTextStore.addPhoneText(text, currentContact.value, timestamp);
 
   // 添加到待发送列表
   const pending = pendingMessages.value.get(currentContact.value) || [];
@@ -567,20 +641,193 @@ function handleSendMessage() {
     scrollToBottom();
   });
 
-  console.info('[PhonePanel] 消息已预存:', message);
+  console.info('[PhonePanel] 消息已添加到聊天界面（未发送）:', message);
+}
+
+// 发送消息（直接发送并触发AI回复）
+async function handleSendMessage() {
+  if (!currentContact.value) return;
+
+  // 如果输入框有内容，先添加到聊天界面
+  if (inputText.value.trim()) {
+    handleEnterNewline();
+  }
+
+  // 获取待发送的消息
+  const pending = pendingMessages.value.get(currentContact.value) || [];
+  if (pending.length === 0) {
+    console.warn('[PhonePanel] 没有待发送的消息');
+    return;
+  }
+
+  try {
+    // 每条消息单独包裹 <phone> 标签，格式：<phone>与{{联系人}}的聊天：消息内容|{{YYYY-MM-DD HH:mm}}</phone>
+    const phoneMessages = pending.map(
+      msg =>
+        `<phone>与${currentContact.value}的聊天：${msg.content}${msg.timestamp ? `|${msg.timestamp}` : ''}</phone>`,
+    );
+
+    // 合并所有消息到一个消息中发送，每个 <phone> 标签占一行
+    const phoneContent = phoneMessages.join('\n');
+
+    console.info('[PhonePanel] 准备发送消息');
+    console.info('[PhonePanel] 待发送消息数量:', pending.length);
+    console.info(
+      '[PhonePanel] 待发送消息内容:',
+      pending.map(msg => msg.content),
+    );
+    console.info('[PhonePanel] 格式化后的phone标签:', phoneContent);
+
+    // 设置手机模式变量为 true
+    await updateVariablesWith(
+      variables => {
+        variables['手机模式'] = true;
+        return variables;
+      },
+      { type: 'message', message_id: props.messageId || getLastMessageId() },
+    );
+
+    // 发送消息到酒馆
+    await triggerSlash('/send ' + phoneContent);
+
+    // 触发 AI 生成回复（/send 不会自动触发）
+    await triggerSlash('/trigger');
+
+    // 清空待发送列表
+    pendingMessages.value.set(currentContact.value, []);
+
+    // 清空该联系人的预发送文本
+    pendingTextStore.clearByContact(currentContact.value);
+
+    console.info('[PhonePanel] 消息已发送并触发AI生成');
+
+    // 监听AI回复
+    startListeningForAIResponse();
+  } catch (error) {
+    console.error('[PhonePanel] 发送消息失败:', error);
+    if (typeof toastr !== 'undefined') {
+      toastr.error('发送消息失败，请检查控制台日志');
+    }
+  }
+}
+
+// 结束手机模式
+async function handleEndPhoneMode() {
+  try {
+    // 设置手机模式变量为 false
+    await updateVariablesWith(
+      variables => {
+        variables['手机模式'] = false;
+        return variables;
+      },
+      { type: 'message', message_id: props.messageId || getLastMessageId() },
+    );
+
+    console.info('[PhonePanel] 手机模式已结束');
+    if (typeof toastr !== 'undefined') {
+      toastr.success('手机模式已结束');
+    }
+  } catch (error) {
+    console.error('[PhonePanel] 结束手机模式失败:', error);
+    if (typeof toastr !== 'undefined') {
+      toastr.error('结束手机模式失败');
+    }
+  }
+}
+
+// 监听AI回复
+function startListeningForAIResponse() {
+  const checkInterval = setInterval(async () => {
+    try {
+      const lastMessageId = typeof getLastMessageId === 'function' ? getLastMessageId() : -1;
+      if (lastMessageId < 0) return;
+
+      const messages = getChatMessages(lastMessageId);
+      if (messages.length === 0) return;
+
+      const messageText = messages[0].message || '';
+      const phoneRegex = /<phone>([^：:]+)[：:](.*?)(?:\|(.+?))?<\/phone>/gi;
+      let match;
+
+      while ((match = phoneRegex.exec(messageText)) !== null) {
+        const contact = match[1].trim();
+        const content = match[2].trim();
+        const timestamp = match[3]?.trim();
+
+        // 保存到世界书
+        await saveMessageToWorldbook(contact, [
+          {
+            speaker: contact,
+            content,
+            timestamp,
+            isUser: false,
+            hideLabel: false,
+          },
+        ]);
+
+        // 删除该楼层
+        await triggerSlash('/del');
+
+        console.info('[PhonePanel] 已接收AI回复并保存到世界书，删除楼层');
+
+        // 停止监听
+        clearInterval(checkInterval);
+        return;
+      }
+    } catch (error) {
+      console.warn('[PhonePanel] 监听AI回复失败:', error);
+    }
+  }, 1000);
+
+  // 30秒后停止监听
+  setTimeout(() => {
+    clearInterval(checkInterval);
+  }, 30000);
 }
 
 // 获取当前时间
 function getCurrentTime(): string {
+  // 尝试从消息变量获取时间
+  try {
+    if (props.messageId !== undefined) {
+      const variables = getVariables({
+        type: 'message',
+        message_id: props.messageId,
+      });
+      const statData = variables?.stat_data;
+      if (statData?.时间) {
+        // 解析格式：'YY/MM/DD - 周X - [时间段] - HH:mm - [天气]'
+        // 例如：'12/4/22 - 周三 - 上午 - 10:22 - 阴雨'
+        const match = statData.时间.match(/(\d{2})\/(\d{1,2})\/(\d{1,2})\s*-\s*周.\s*-\s*.*?\s*-\s*(\d{1,2}):(\d{2})/);
+        if (match) {
+          // 补充"20"前缀
+          const year = '20' + match[1];
+          const month = match[2].padStart(2, '0');
+          const day = match[3].padStart(2, '0');
+          const hour = match[4].padStart(2, '0');
+          const minute = match[5];
+          return `${year}-${month}-${day} ${hour}:${minute}`;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[PhonePanel] 从消息变量获取时间失败:', error);
+  }
+
   // 尝试从 MVU 变量获取时间
   try {
     if (typeof Mvu !== 'undefined' && (Mvu as any).get) {
       const mvuTime = (Mvu as any).get('时间');
       if (mvuTime) {
-        // 解析格式：'2012/4/22 - 周三 - 上午 - 10:22 - 阴雨'
-        const match = mvuTime.match(/(\d{4})\/(\d{1,2})\/(\d{1,2}).*?(\d{1,2}):(\d{2})/);
+        // 解析格式：'YY/MM/DD - 周X - [时间段] - HH:mm - [天气]'
+        const match = mvuTime.match(/(\d{2})\/(\d{1,2})\/(\d{1,2})\s*-\s*周.\s*-\s*.*?\s*-\s*(\d{1,2}):(\d{2})/);
         if (match) {
-          return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')} ${match[4].padStart(2, '0')}:${match[5]}`;
+          const year = '20' + match[1];
+          const month = match[2].padStart(2, '0');
+          const day = match[3].padStart(2, '0');
+          const hour = match[4].padStart(2, '0');
+          const minute = match[5];
+          return `${year}-${month}-${day} ${hour}:${minute}`;
         }
       }
     }
@@ -665,7 +912,7 @@ async function loadHistoryMessages(contact: string) {
     }
 
     // 解析历史记录
-    // 格式: {{联系人}}：消息内容|时间 或 {{user}}：消息内容|时间
+    // 格式: [与{{联系人}}的聊天记录如下：]\n{{联系人}}：消息内容|时间 或 {{user}}：消息内容|时间
     const historyMessages: PhoneMessage[] = [];
     const lines = historyContent.split('\n').filter(line => line.trim());
 
@@ -706,6 +953,11 @@ async function loadHistoryMessages(contact: string) {
     }
 
     for (const line of lines) {
+      // 跳过标题行（分割线）
+      if (line.match(/^\[与.+的聊天记录如下：\]$/)) {
+        continue;
+      }
+
       const match = line.match(/^([^：:]+)[：:](.*?)(?:\|(.+))?$/);
       if (match) {
         const speaker = match[1].trim();
@@ -737,7 +989,21 @@ async function loadHistoryMessages(contact: string) {
     // 如果当前选中的是这个联系人，更新显示
     if (currentContact.value === contact) {
       const oldScrollHeight = scrollContainer.value?.scrollHeight || 0;
-      displayMessages.value = [...historyMessages, ...displayMessages.value];
+
+      // 添加分割线
+      const dividerMessage: PhoneMessage = {
+        speaker: '',
+        content: `[与${contact}的聊天记录如下：]`,
+        isUser: false,
+        hideLabel: true,
+      };
+
+      // 移除旧的分割线（如果有）
+      const messagesWithoutDivider = displayMessages.value.filter(
+        msg => !msg.content.match(/^\[与.+的聊天记录如下：\]$/),
+      );
+
+      displayMessages.value = [dividerMessage, ...historyMessages, ...messagesWithoutDivider];
 
       // 保持滚动位置
       nextTick(() => {
@@ -852,20 +1118,50 @@ async function saveMessageToWorldbook(contact: string, messages: PhoneMessage[])
 
     if (entry) {
       // 更新现有条目
+      // 检查是否已有标题行
+      if (!entry.content.includes(`[与${contact}的聊天记录如下：]`)) {
+        entry.content = `[与${contact}的聊天记录如下：]\n` + entry.content;
+      }
       entry.content += '\n' + formattedMessages;
-      await replaceWorldbook(worldbookName, [entry]);
+      await updateWorldbookWith(worldbookName, wb => {
+        const idx = wb.findIndex((e: any) => e.uid === entry.uid);
+        if (idx !== -1) {
+          wb[idx] = entry;
+        }
+        return wb;
+      });
       console.info('[PhonePanel] 消息已保存到世界书:', entryName);
     } else {
       // 创建新条目
       const newEntry: any = {
         name: entryName,
-        content: formattedMessages,
+        content: `[与${contact}的聊天记录如下：]\n` + formattedMessages,
         enabled: true,
-        keys: [contact],
-        priority: 100,
+        strategy: {
+          type: 'selective',
+          keys: [contact],
+          keys_secondary: { logic: 'and_any', keys: [] },
+          scan_depth: 'same_as_global',
+        },
+        position: {
+          type: 'after_character_definition',
+          role: 'system',
+          depth: 4,
+          order: 100,
+        },
+        probability: 100,
+        recursion: {
+          prevent_incoming: false,
+          prevent_outgoing: false,
+          delay_until: null,
+        },
+        effect: {
+          sticky: null,
+          cooldown: null,
+          delay: null,
+        },
       };
-      // 使用 addWorldbookEntries 而非 addWorldbookEntry
-      await replaceWorldbook(worldbookName, [newEntry]);
+      await createWorldbookEntries(worldbookName, [newEntry]);
       console.info('[PhonePanel] 新建世界书条目并保存消息:', entryName);
     }
   } catch (error) {
@@ -909,8 +1205,23 @@ function reset() {
     autoPlayTimer.value = null;
   }
   currentTheaterIndex.value = 0;
-  displayMessages.value = [];
-  console.info('[PhonePanel] 小剧场已重置');
+
+  // 如果当前在聊天模式，保持聊天记录
+  if (currentContact.value) {
+    const messages = allMessages.value.get(currentContact.value) || [];
+    const dividerMessage: PhoneMessage = {
+      speaker: '',
+      content: `[与${currentContact.value}的聊天记录如下：]`,
+      isUser: false,
+      hideLabel: true,
+    };
+    displayMessages.value = [dividerMessage, ...messages];
+  } else {
+    // 小剧场模式，清空显示
+    displayMessages.value = [];
+  }
+
+  console.info('[PhonePanel] 已重置');
 }
 
 // 播放下一条小剧场消息
@@ -1153,10 +1464,8 @@ async function loadTheaterText(): Promise<void> {
       theaterMessages.value = parseTheaterContent(skitData.content);
       console.info('[PhonePanel] 小剧场消息解析完成，消息数:', theaterMessages.value.length);
 
-      // 如果有联系人，默认选中第一个
-      if (contacts.value.length > 0 && !currentContact.value) {
-        selectContact(contacts.value[0]);
-      }
+      // 不自动选中联系人，保持小剧场模式
+      // 用户需要手动点击联系人列表来切换到聊天模式
 
       // 自动展开联系人列表
       if (unreadContacts.value.size > 0) {
@@ -1643,6 +1952,57 @@ defineExpose({
   margin: 0 2px;
 }
 
+/* 分割线样式 */
+.text-muted-foreground {
+  color: #aaa;
+}
+
+.bg-border {
+  background-color: #ddd;
+}
+
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.gap-3 {
+  gap: 12px;
+}
+
+.my-4 {
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.px-4 {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.select-none {
+  user-select: none;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.h-px {
+  height: 1px;
+}
+
+.whitespace-nowrap {
+  white-space: nowrap;
+}
+
 .cursor {
   display: inline-block;
   width: 6px;
@@ -1667,8 +2027,16 @@ defineExpose({
   border-top: 1px solid rgba(165, 214, 167, 0.3);
 }
 
+.cmd-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .cmd-input {
   flex: 1;
+  width: 100%;
   height: 32px;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(129, 199, 132, 0.3);
@@ -1676,7 +2044,7 @@ defineExpose({
   font-family: 'Noto Serif SC', sans-serif;
   font-size: 14px;
   color: #2e7d32;
-  padding: 0 12px;
+  padding: 0 40px 0 12px;
   outline: none;
   transition: all 0.3s;
 }
@@ -1689,6 +2057,40 @@ defineExpose({
 .cmd-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.cmd-newline-btn-inline {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: #81c784;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.cmd-newline-btn-inline:hover:not(:disabled) {
+  background: rgba(129, 199, 132, 0.15);
+  color: #4caf50;
+}
+
+.cmd-newline-btn-inline:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cmd-newline-btn-inline .icon {
+  width: 16px;
+  height: 16px;
 }
 
 .cmd-send-btn {

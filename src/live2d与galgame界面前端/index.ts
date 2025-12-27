@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { createApp } from 'vue';
+import { createPinia } from 'pinia';
 import './styles/globals.css';
 
 // 将 PIXI 挂载到全局，供 pixi-live2d-display 使用
@@ -62,7 +63,7 @@ $(() => {
         /* webpackMode: "eager" */
         './components/GalgamePlayer.vue'
       );
-      createApp(GalgamePlayer).mount('#app');
+      createApp(GalgamePlayer).use(createPinia()).mount('#app');
       console.info('[应用] Vue 应用已挂载');
     })
     .catch(error => {

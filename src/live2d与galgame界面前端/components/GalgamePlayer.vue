@@ -540,6 +540,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { usePendingTextStore } from '../stores/pendingText';
 import type { ChoiceOption, DialogBoxStyle, DialogueItem } from '../types/galgame';
 import { defaultDialogStyle } from '../types/galgame';
 import type { MessageBlock } from '../types/message';
@@ -564,6 +565,9 @@ const STORAGE_KEYS = {
   LIVE2D_SETTINGS: 'galgame_live2d_settings',
   USER_DISPLAY_NAME: 'galgame_user_display_name',
 } as const;
+
+// 预发送文本 store
+const pendingTextStore = usePendingTextStore();
 
 const containerRef = ref<HTMLDivElement | null>(null);
 const autoPlayTimerRef = ref<ReturnType<typeof setTimeout> | null>(null);
@@ -2124,9 +2128,68 @@ function getTheaterPhoneContent(): string {
 
 // 统一的消息发送函数，自动附加phone标签（只针对小剧场输入的内容）
 async function sendUserMessageWithPhone(messageText: string) {
+  // 检测是否有连续创建的多个演出单元
+  // 如果有，则使用预发送文本构建发送内容，而不是使用消息文本中的 [[user||...]] 块
+  const inputTexts = pendingTextStore.getInputTexts();
+  const phoneTexts = pendingTextStore.getPhoneTexts();
+
+  console.info('[GalgamePlayer] 准备发送消息');
+  console.info('[GalgamePlayer] GalgamePlayer 输入的预发送文本数量:', inputTexts.length);
+  console.info('[GalgamePlayer] GalgamePlayer 输入的预发送文本:', inputTexts.map(t => t.text));
+  console.info('[GalgamePlayer] PhonePanel 预发送文本数量:', phoneTexts.length);
+  console.info('[GalgamePlayer] PhonePanel 预发送文本:', phoneTexts.map(t => t.text));
+
+  let finalMessage = '';
+
+  if (inputTexts.length > 0) {
+    // 有连续创建的多个演出单元，使用预发送文本
+    console.info('[GalgamePlayer] 检测到连续创建的演出单元，使用预发送文本构建发送内容');
+
+    // 获取当前场景
+    const currentScene = currentDialogue.value?.scene || '{{scene}}';
+
+    // 为每个输入文本创建 [[user||...]] 块
+    const userBlocks = inputTexts.map(item => `[[user||场景：${currentScene}||台词：${item.text}]]`).join('\n\n');
+
+    finalMessage = userBlocks;
+  } else {
+    // 没有预发送文本，使用传入的消息文本
+    finalMessage = messageText;
+  }
+
+  // 附加 PhonePanel 的预发送文本（格式化为 <phone> 标签）
   const phoneContent = getTheaterPhoneContent();
-  // 只有当有小剧场输入内容时才附加phone标签，且只包裹小剧场的内容
-  const finalMessage = phoneContent ? `${messageText}\n\n${phoneContent}` : messageText;
+  if (phoneContent) {
+    finalMessage = `${finalMessage}\n\n${phoneContent}`;
+  }
+
+  // 同时附加 PhonePanel store 中的预发送文本
+  if (phoneTexts.length > 0) {
+    console.info('[GalgamePlayer] 附加 PhonePanel store 中的预发送文本');
+    // 按联系人分组
+    const phoneTextsByContact = new Map<string, typeof phoneTexts>();
+    for (const item of phoneTexts) {
+      if (item.contact) {
+        const existing = phoneTextsByContact.get(item.contact) || [];
+        existing.push(item);
+        phoneTextsByContact.set(item.contact, existing);
+      }
+    }
+
+    // 为每个联系人生成 <phone> 标签
+    const phoneBlocks: string[] = [];
+    for (const [contact, items] of phoneTextsByContact.entries()) {
+      for (const item of items) {
+        phoneBlocks.push(`<phone>与${contact}的聊天：${item.text}|${item.timestamp}</phone>`);
+      }
+    }
+
+    if (phoneBlocks.length > 0) {
+      finalMessage = `${finalMessage}\n\n${phoneBlocks.join('\n')}`;
+    }
+  }
+
+  console.info('[GalgamePlayer] 最终发送的消息内容:', finalMessage);
 
   await createChatMessages(
     [
@@ -2137,6 +2200,10 @@ async function sendUserMessageWithPhone(messageText: string) {
     ],
     { refresh: 'none' },
   );
+
+  // 发送后清除所有预发送文本
+  pendingTextStore.clearAll();
+  console.info('[GalgamePlayer] 已清除所有预发送文本');
 }
 
 /**
@@ -2205,10 +2272,11 @@ async function handleSaveToStory(text: string) {
     // 在本地对话列表中添加用户消息（不重新加载）
     const tempMessageId = getLastMessageId() + 1;
     const tempUnitIndex = dialogues.value.length;
+    const unitId = `msg_${tempMessageId}_unit_${tempUnitIndex}`;
     // 继承当前对话的背景和立绘状态
     const currentDialogueData = currentDialogue.value;
     const newDialogue: DialogueItem = {
-      unitId: `msg_${tempMessageId}_unit_${tempUnitIndex}`,
+      unitId,
       unitIndex: tempUnitIndex,
       character: '你',
       text,
@@ -2227,6 +2295,10 @@ async function handleSaveToStory(text: string) {
       isCG: currentDialogueData?.isCG,
       cgImageUrl: currentDialogueData?.cgImageUrl,
     };
+
+    // 添加到预发送文本 store
+    const timestamp = new Date().toISOString();
+    pendingTextStore.addInputText(text, timestamp, unitId);
 
     // 插入到对话列表
     const newDialogues = [...dialogues.value];
@@ -3014,6 +3086,7 @@ async function handleSendInput() {
   if (!inputText.value.trim()) return;
 
   const text = inputText.value.trim();
+  const timestamp = new Date().toISOString();
   inputText.value = '';
   showInputBox.value = false;
 
@@ -3067,8 +3140,9 @@ async function handleSendInput() {
   const tempMessageId = getLastMessageId() + 1;
   const tempUnitIndex = dialogues.value.length;
   const currentDialogueData = currentDialogue.value;
+  const unitId = `msg_${tempMessageId}_unit_${tempUnitIndex}`;
   const newDialogue: DialogueItem = {
-    unitId: `msg_${tempMessageId}_unit_${tempUnitIndex}`,
+    unitId,
     unitIndex: tempUnitIndex,
     character: '你',
     text,
@@ -3087,6 +3161,9 @@ async function handleSendInput() {
     isCG: currentDialogueData?.isCG,
     cgImageUrl: currentDialogueData?.cgImageUrl,
   };
+
+  // 添加到预发送文本 store
+  const pendingTextId = pendingTextStore.addInputText(text, timestamp, unitId);
 
   // 插入到对话列表
   const newDialogues = [...dialogues.value];
@@ -3119,6 +3196,15 @@ async function handleSendInput() {
 
     // 重新加载对话数据（不自动跳转，保持用户播放位置）
     await loadDialoguesFromTavern();
+
+    // 重新加载后，如果进入了新的演出单元（AI 生成了回复），则从预发送文本中移除
+    // 因为此时输入已经提交到消息文本
+    const newLastMessageId = getLastMessageId();
+    if (newLastMessageId > lastMessageId) {
+      // 说明进入了新的演出单元
+      pendingTextStore.clearByUnitId(unitId);
+      console.info('[GalgamePlayer] 输入已提交到消息文本，从预发送文本中移除:', unitId);
+    }
   } catch (error) {
     console.error('发送消息失败:', error);
   }
@@ -3149,11 +3235,18 @@ async function handleEditUserMessage(messageId: number, newText: string) {
     const dialogueIndex = dialogues.value.findIndex(d => d.message_id === messageId);
     if (dialogueIndex !== -1) {
       const newDialogues = [...dialogues.value];
+      const dialogue = newDialogues[dialogueIndex];
       newDialogues[dialogueIndex] = {
-        ...newDialogues[dialogueIndex],
+        ...dialogue,
         text: newText,
       };
       dialogues.value = newDialogues;
+
+      // 如果该消息在预发送文本中，也要同步更新
+      if (dialogue.unitId) {
+        pendingTextStore.updateTextByUnitId(dialogue.unitId, newText);
+        console.info('[GalgamePlayer] 同步编辑到预发送文本:', dialogue.unitId, newText);
+      }
     }
 
     console.info('已同步编辑到楼层消息（不刷新界面）:', messageId, newText);
