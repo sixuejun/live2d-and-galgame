@@ -50,7 +50,7 @@ export interface ImportedModel {
 
 /** 模型文件 */
 export interface ModelFile {
-  type: 'texture' | 'moc3' | 'model3' | 'cdi3';
+  type: 'texture' | 'moc3' | 'model3' | 'cdi3' | 'moc' | 'model' | 'physics';
   url: string;
   filename: string;
   /** 如果是本地文件，存储 IndexedDB 文件 ID */
@@ -72,7 +72,7 @@ export interface MotionFile {
 
 /** 解析到的文件URL信息 */
 export interface ParsedFileUrl {
-  type: 'texture' | 'moc3' | 'model3' | 'cdi3' | 'physics3' | 'motion' | 'expression';
+  type: 'texture' | 'moc3' | 'model3' | 'cdi3' | 'physics3' | 'motion' | 'expression' | 'moc' | 'model' | 'physics';
   url: string;
   filename: string;
   name?: string;
@@ -84,6 +84,9 @@ export interface VirtualModelFiles {
   moc3: { file: File; url: string } | null;
   model3: { file: File; url: string } | null;
   cdi3: { file: File; url: string } | null;
+  moc: { file: File; url: string } | null;
+  model: { file: File; url: string } | null;
+  physics: { file: File; url: string } | null;
   motions: { file: File; url: string; name: string; type: 'motion' | 'expression' }[];
 }
 

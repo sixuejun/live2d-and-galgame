@@ -1041,20 +1041,35 @@ export function classifyFiles(files: File[], defaultModelName: string): Record<s
     const modelName = defaultModelName;
 
     if (!modelFiles[modelName]) {
-      modelFiles[modelName] = { textures: [], moc3: null, model3: null, cdi3: null, motions: [] };
+      modelFiles[modelName] = { 
+        textures: [], 
+        moc3: null, 
+        model3: null, 
+        cdi3: null, 
+        moc: null, 
+        model: null, 
+        physics: null, 
+        motions: [] 
+      };
     }
 
     const url = URL.createObjectURL(file);
 
-    if (filename.endsWith('.png')) {
+    if (filename.endsWith('.png') || filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
       modelFiles[modelName].textures.push({ file, url });
     } else if (filename.endsWith('.moc3')) {
       modelFiles[modelName].moc3 = { file, url };
+    } else if (filename.endsWith('.moc') && !filename.endsWith('.moc3')) {
+      modelFiles[modelName].moc = { file, url };
     } else if (filename.endsWith('.model3.json')) {
       modelFiles[modelName].model3 = { file, url };
+    } else if (filename.endsWith('.model.json')) {
+      modelFiles[modelName].model = { file, url };
     } else if (filename.endsWith('.cdi3.json')) {
       modelFiles[modelName].cdi3 = { file, url };
-    } else if (filename.endsWith('.motion3.json')) {
+    } else if (filename.endsWith('.physics3.json') || filename.endsWith('.physics.json')) {
+      modelFiles[modelName].physics = { file, url };
+    } else if (filename.endsWith('.motion3.json') || filename.endsWith('.motion.json')) {
       const motionType = detectMotionType(file.name);
       const motionName = extractMotionNameFromFile(file.name);
 
@@ -1296,32 +1311,62 @@ function convertToLive2DConfig(model: ImportedModel, baseDir?: string): Live2DMo
   // 检查是否是本地文件（存储在 IndexedDB）
   const isLocalFile = model.files.some(f => f.isLocal) || model.motions.some(m => m.isLocal);
 
-  // 找到 model3.json 文件以获取模型路径
-  const model3File = model.files.find(f => f.type === 'model3');
-  if (!model3File) {
-    // 如果没有 model3.json，尝试使用 moc3
-    const moc3File = model.files.find(f => f.type === 'moc3');
-    if (!moc3File) {
-      console.warn(`[开场界面] 模型 ${model.name} 没有找到 model3.json 或 moc3 文件`);
-      return null;
-    }
-    // 如果只有 moc3，需要创建一个虚拟的 model3.json 路径
-    const modelPath = 'model.model3.json';
-    let basePath: string;
-
-    if (isLocalFile && moc3File.fileId) {
-      // 本地文件：使用 indexeddb:// 协议标识
-      basePath = `indexeddb://${model.name}/`;
+  // 检测模型版本和文件类型
+  let modelFile: VirtualModelFile | undefined;
+  let detectedVersion = 3; // 默认版本 3
+  
+  // 优先使用 model3.json (Cubism 3/4)
+  modelFile = model.files.find(f => f.type === 'model3');
+  if (modelFile) {
+    detectedVersion = 3;
+  } else {
+    // 尝试使用 model.json (Cubism 2.1)
+    modelFile = model.files.find(f => f.type === 'model');
+    if (modelFile) {
+      detectedVersion = 2;
     } else {
-      basePath = baseDir || extractBasePathFromUrl(moc3File.url);
+      // 尝试使用 moc3 (Cubism 3/4)
+      modelFile = model.files.find(f => f.type === 'moc3');
+      if (modelFile) {
+        detectedVersion = 3;
+      } else {
+        // 尝试使用 moc (Cubism 2.1)
+        modelFile = model.files.find(f => f.type === 'moc');
+        if (modelFile) {
+          detectedVersion = 2;
+        }
+      }
     }
+  }
 
+  if (!modelFile) {
+    console.warn(`[开场界面] 模型 ${model.name} 没有找到模型文件`);
+    return null;
+  }
+
+  // 如果只有 moc/moc3 文件，创建虚拟的配置文件路径
+  const modelPath = modelFile.type === 'moc' || modelFile.type === 'moc3' 
+    ? (detectedVersion === 2 ? 'model.model.json' : 'model.model3.json')
+    : modelFile.filename;
+  
+  let basePath: string;
+
+  if (isLocalFile && modelFile.fileId) {
+    // 本地文件：使用 indexeddb:// 协议标识
+    basePath = `indexeddb://${model.name}/`;
+  } else {
+    // URL 文件：从 URL 中提取目录部分
+    basePath = baseDir || extractBasePathFromUrl(modelFile.url);
+  }
+
+  // 如果只有 moc/moc3 文件，返回基础配置
+  if (modelFile.type === 'moc' || modelFile.type === 'moc3') {
     return {
       id: model.name.toLowerCase().replace(/\s+/g, '_'),
       name: model.name,
       modelPath,
       basePath,
-      version: 3,
+      version: detectedVersion,
       motions: [],
       expressions: [],
       textures: model.files.filter(f => f.type === 'texture').map(f => f.filename),
@@ -1330,15 +1375,16 @@ function convertToLive2DConfig(model: ImportedModel, baseDir?: string): Live2DMo
     };
   }
 
-  const modelPath = model3File.filename;
-  let basePath: string;
+  // 有完整的 model.json 或 model3.json 文件
+  const modelPath_final = modelFile.filename;
+  let basePath_final: string;
 
-  if (isLocalFile && model3File.fileId) {
+  if (isLocalFile && modelFile.fileId) {
     // 本地文件：使用 indexeddb:// 协议标识
-    basePath = `indexeddb://${model.name}/`;
+    basePath_final = `indexeddb://${model.name}/`;
   } else {
     // URL 文件：从 URL 中提取目录部分
-    basePath = baseDir || extractBasePathFromUrl(model3File.url);
+    basePath_final = baseDir || extractBasePathFromUrl(modelFile.url);
   }
 
   // 提取纹理文件名
@@ -1358,18 +1404,18 @@ function convertToLive2DConfig(model: ImportedModel, baseDir?: string): Live2DMo
         // 实际加载时，会通过 fileId 从 IndexedDB 读取文件
         // 格式：indexeddb:fileId 或直接使用 fileId 作为文件引用
         // 为了兼容性，我们使用相对路径格式，但在 _fileIds 中存储映射
-        const filename = motion.url || motion.name + '.motion3.json';
-        fileReference = filename.split('/').pop() || motion.name + '.motion3.json';
+        const filename = motion.url || motion.name + (detectedVersion === 2 ? '.motion.json' : '.motion3.json');
+        fileReference = filename.split('/').pop() || motion.name + (detectedVersion === 2 ? '.motion.json' : '.motion3.json');
       } else {
         // URL 文件：提取文件名或相对路径
         const filename = motion.url.includes('/')
           ? motion.url.substring(motion.url.lastIndexOf('/') + 1)
-          : motion.name + '.motion3.json';
+          : motion.name + (detectedVersion === 2 ? '.motion.json' : '.motion3.json');
 
         // 尝试从 URL 提取相对路径
         let relativePath = filename;
-        if (motion.url && motion.url.startsWith(basePath)) {
-          relativePath = motion.url.substring(basePath.length);
+        if (motion.url && motion.url.startsWith(basePath_final)) {
+          relativePath = motion.url.substring(basePath_final.length);
         }
         fileReference = relativePath;
       }
@@ -1386,15 +1432,15 @@ function convertToLive2DConfig(model: ImportedModel, baseDir?: string): Live2DMo
   }
 
   // 查找物理文件和姿势文件（如果存在）
-  const physicsFile = model.files.find(f => f.type === 'cdi3');
+  const physicsFile = model.files.find(f => f.type === 'cdi3' || f.type === 'physics');
   const physics = physicsFile ? physicsFile.filename : undefined;
 
   const config: Live2DModelConfig & { _fileIds?: Record<string, string> } = {
     id: model.name.toLowerCase().replace(/\s+/g, '_'),
     name: model.name,
-    modelPath,
-    basePath,
-    version: 3, // 默认为 version 3（model3.json）
+    modelPath: modelPath_final,
+    basePath: basePath_final,
+    version: detectedVersion, // 使用检测到的版本
     motions,
     expressions,
     textures,
@@ -1463,11 +1509,13 @@ async function saveModelToVariables(model: ImportedModel, baseDir?: string) {
 
 /**
  * 解析 model3.json 文件，提取 motions 数组及其索引
+ * 同时提取动作的 name（从文件名中提取）
  */
 export async function parseModel3Motions(model3File: File): Promise<
   Array<{
     motions: Array<{
       file: string;
+      name: string;
       index: number;
       fadeInTime?: number;
       fadeOutTime?: number;
@@ -1482,6 +1530,7 @@ export async function parseModel3Motions(model3File: File): Promise<
     const result: Array<{
       motions: Array<{
         file: string;
+        name: string;
         index: number;
         fadeInTime?: number;
         fadeOutTime?: number;
@@ -1493,12 +1542,18 @@ export async function parseModel3Motions(model3File: File): Promise<
     if (model3Json.FileReferences?.Motions) {
       for (const [group, motionsArray] of Object.entries(model3Json.FileReferences.Motions)) {
         if (Array.isArray(motionsArray)) {
-          const motions = motionsArray.map((motion: any, index: number) => ({
-            file: motion.File || motion.file,
-            index,
-            fadeInTime: motion.FadeInTime || motion.fadeInTime,
-            fadeOutTime: motion.FadeOutTime || motion.fadeOutTime,
-          }));
+          const motions = motionsArray.map((motion: any, index: number) => {
+            const file = motion.File || motion.file;
+            const name = extractMotionName(file, '');
+            
+            return {
+              file,
+              name,
+              index,
+              fadeInTime: motion.FadeInTime || motion.fadeInTime,
+              fadeOutTime: motion.FadeOutTime || motion.fadeOutTime,
+            };
+          });
 
           result.push({
             motions,
@@ -1513,5 +1568,68 @@ export async function parseModel3Motions(model3File: File): Promise<
   } catch (error) {
     console.error('[parseModel3Motions] 解析失败:', error);
     throw new Error('无法解析 model3.json 文件');
+  }
+}
+
+/**
+ * 解析 model.json 文件（Cubism 2.1），提取 motions 数组及其索引
+ */
+export async function parseModelMotions(modelFile: File): Promise<
+  Array<{
+    motions: Array<{
+      file: string;
+      name: string;
+      index: number;
+      fadeIn?: number;
+      fadeOut?: number;
+    }>;
+    group: string;
+  }>
+> {
+  try {
+    const content = await modelFile.text();
+    const modelJson = JSON.parse(content);
+
+    const result: Array<{
+      motions: Array<{
+        file: string;
+        name: string;
+        index: number;
+        fadeIn?: number;
+        fadeOut?: number;
+      }>;
+      group: string;
+    }> = [];
+
+    // 解析 motions（Cubism 2.1 格式）
+    if (modelJson.motions) {
+      for (const [group, motionsArray] of Object.entries(modelJson.motions)) {
+        if (Array.isArray(motionsArray)) {
+          const motions = motionsArray.map((motion: any, index: number) => {
+            const file = motion.file || motion.File;
+            const name = extractMotionName(file, '');
+            
+            return {
+              file,
+              name,
+              index,
+              fadeIn: motion.fade_in || motion.fadeIn,
+              fadeOut: motion.fade_out || motion.fadeOut,
+            };
+          });
+
+          result.push({
+            motions,
+            group,
+          });
+        }
+      }
+    }
+
+    console.info('[parseModelMotions] 解析结果:', result);
+    return result;
+  } catch (error) {
+    console.error('[parseModelMotions] 解析失败:', error);
+    throw new Error('无法解析 model.json 文件');
   }
 }

@@ -43,6 +43,8 @@ export interface MessageBlock {
   noteContent?: string;
   noteUnitId?: string; // 小纸条绑定的演出单元ID
   choiceFormat?: 'format1' | 'format2'; // 选项格式标识
+  // 角色离场标记
+  shouldExit?: boolean;
 }
 
 /**

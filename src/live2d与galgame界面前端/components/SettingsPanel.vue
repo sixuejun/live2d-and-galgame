@@ -40,37 +40,26 @@
                 <h3 class="text-foreground text-sm font-medium">立绘设置</h3>
                 <p class="text-muted-foreground text-xs">调整静态立绘图片的显示效果</p>
               </div>
-              <div class="flex items-center gap-1 rounded-lg border border-border bg-background p-1">
+              <div class="flex gap-1 rounded-md border border-border bg-background p-0.5">
                 <button
                   :class="[
-                    'px-2 py-1 text-xs rounded transition-colors',
-                    spritePositionMode === 'left'
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    currentSpriteSide === 'left'
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   ]"
-                  @click="spritePositionMode = 'left'"
+                  @click="currentSpriteSide = 'left'"
                 >
                   左
                 </button>
                 <button
                   :class="[
-                    'px-2 py-1 text-xs rounded transition-colors',
-                    spritePositionMode === 'single'
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    currentSpriteSide === 'right'
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   ]"
-                  @click="spritePositionMode = 'single'"
-                >
-                  默认
-                </button>
-                <button
-                  :class="[
-                    'px-2 py-1 text-xs rounded transition-colors',
-                    spritePositionMode === 'right'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
-                  ]"
-                  @click="spritePositionMode = 'right'"
+                  @click="currentSpriteSide = 'right'"
                 >
                   右
                 </button>
@@ -79,34 +68,31 @@
             <div class="space-y-3">
               <div class="space-y-2">
                 <label class="text-muted-foreground text-xs"
-                  >大小 ({{ Math.round(currentSpriteSettings.scale * 100) }}%)</label
+                  >大小 ({{ Math.round(displayedSpriteSettings.scale * 100) }}%)</label
                 >
                 <input
                   type="range"
-                  :value="currentSpriteSettings.scale"
+                  :value="displayedSpriteSettings.scale"
                   min="0.5"
-                  max="1.5"
+                  max="2.0"
                   step="0.05"
                   class="w-full"
                   @input="
                     e =>
                       updateSpriteSettings({
-                        ...props.spriteSettings,
-                        [spritePositionMode]: {
-                          ...currentSpriteSettings,
-                          scale: parseFloat((e.target as HTMLInputElement).value),
-                        },
+                        ...displayedSpriteSettings,
+                        scale: parseFloat((e.target as HTMLInputElement).value),
                       })
                   "
                 />
               </div>
               <div class="space-y-2">
                 <label class="text-muted-foreground text-xs"
-                  >水平位置 ({{ currentSpriteSettings.positionX }}%)</label
+                  >水平位置 ({{ displayedSpriteSettings.positionX }}%)</label
                 >
                 <input
                   type="range"
-                  :value="currentSpriteSettings.positionX"
+                  :value="displayedSpriteSettings.positionX"
                   min="0"
                   max="100"
                   step="1"
@@ -114,22 +100,19 @@
                   @input="
                     e =>
                       updateSpriteSettings({
-                        ...props.spriteSettings,
-                        [spritePositionMode]: {
-                          ...currentSpriteSettings,
-                          positionX: parseInt((e.target as HTMLInputElement).value),
-                        },
+                        ...displayedSpriteSettings,
+                        positionX: parseInt((e.target as HTMLInputElement).value),
                       })
                   "
                 />
               </div>
               <div class="space-y-2">
                 <label class="text-muted-foreground text-xs"
-                  >垂直位置 ({{ currentSpriteSettings.positionY }}%)</label
+                  >垂直位置 ({{ displayedSpriteSettings.positionY }}%)</label
                 >
                 <input
                   type="range"
-                  :value="currentSpriteSettings.positionY"
+                  :value="displayedSpriteSettings.positionY"
                   min="0"
                   max="200"
                   step="1"
@@ -137,11 +120,8 @@
                   @input="
                     e =>
                       updateSpriteSettings({
-                        ...props.spriteSettings,
-                        [spritePositionMode]: {
-                          ...currentSpriteSettings,
-                          positionY: parseInt((e.target as HTMLInputElement).value),
-                        },
+                        ...displayedSpriteSettings,
+                        positionY: parseInt((e.target as HTMLInputElement).value),
                       })
                   "
                 />
@@ -156,37 +136,26 @@
                 <h3 class="text-foreground text-sm font-medium">Live2D 模型设置</h3>
                 <p class="text-muted-foreground text-xs">调整 Live2D 动态模型的显示效果</p>
               </div>
-              <div class="flex items-center gap-1 rounded-lg border border-border bg-background p-1">
+              <div class="flex gap-1 rounded-md border border-border bg-background p-0.5">
                 <button
                   :class="[
-                    'px-2 py-1 text-xs rounded transition-colors',
-                    live2dPositionMode === 'left'
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    currentLive2dSide === 'left'
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   ]"
-                  @click="live2dPositionMode = 'left'"
+                  @click="currentLive2dSide = 'left'"
                 >
                   左
                 </button>
                 <button
                   :class="[
-                    'px-2 py-1 text-xs rounded transition-colors',
-                    live2dPositionMode === 'single'
+                    'px-3 py-1 text-xs rounded transition-colors',
+                    currentLive2dSide === 'right'
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground',
                   ]"
-                  @click="live2dPositionMode = 'single'"
-                >
-                  默认
-                </button>
-                <button
-                  :class="[
-                    'px-2 py-1 text-xs rounded transition-colors',
-                    live2dPositionMode === 'right'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
-                  ]"
-                  @click="live2dPositionMode = 'right'"
+                  @click="currentLive2dSide = 'right'"
                 >
                   右
                 </button>
@@ -195,11 +164,11 @@
             <div class="space-y-3">
               <div class="space-y-2">
                 <label class="text-muted-foreground text-xs"
-                  >大小 ({{ Math.round(currentLive2dSettings.scale * 100) }}%)</label
+                  >大小 ({{ Math.round(displayedLive2dSettings.scale * 100) }}%)</label
                 >
                 <input
                   type="range"
-                  :value="currentLive2dSettings.scale"
+                  :value="displayedLive2dSettings.scale"
                   min="0"
                   max="2"
                   step="0.05"
@@ -207,22 +176,19 @@
                   @input="
                     e =>
                       updateLive2dSettings({
-                        ...props.live2dSettings,
-                        [live2dPositionMode]: {
-                          ...currentLive2dSettings,
-                          scale: parseFloat((e.target as HTMLInputElement).value),
-                        },
+                        ...displayedLive2dSettings,
+                        scale: parseFloat((e.target as HTMLInputElement).value),
                       })
                   "
                 />
               </div>
               <div class="space-y-2">
                 <label class="text-muted-foreground text-xs"
-                  >水平位置 ({{ currentLive2dSettings.positionX }}%)</label
+                  >水平位置 ({{ displayedLive2dSettings.positionX }}%)</label
                 >
                 <input
                   type="range"
-                  :value="currentLive2dSettings.positionX"
+                  :value="displayedLive2dSettings.positionX"
                   min="0"
                   max="100"
                   step="1"
@@ -230,22 +196,19 @@
                   @input="
                     e =>
                       updateLive2dSettings({
-                        ...props.live2dSettings,
-                        [live2dPositionMode]: {
-                          ...currentLive2dSettings,
-                          positionX: parseInt((e.target as HTMLInputElement).value),
-                        },
+                        ...displayedLive2dSettings,
+                        positionX: parseInt((e.target as HTMLInputElement).value),
                       })
                   "
                 />
               </div>
               <div class="space-y-2">
                 <label class="text-muted-foreground text-xs"
-                  >垂直位置 ({{ currentLive2dSettings.positionY }}%)</label
+                  >垂直位置 ({{ displayedLive2dSettings.positionY }}%)</label
                 >
                 <input
                   type="range"
-                  :value="currentLive2dSettings.positionY"
+                  :value="displayedLive2dSettings.positionY"
                   min="0"
                   max="150"
                   step="1"
@@ -253,11 +216,8 @@
                   @input="
                     e =>
                       updateLive2dSettings({
-                        ...props.live2dSettings,
-                        [live2dPositionMode]: {
-                          ...currentLive2dSettings,
-                          positionY: parseInt((e.target as HTMLInputElement).value),
-                        },
+                        ...displayedLive2dSettings,
+                        positionY: parseInt((e.target as HTMLInputElement).value),
                       })
                   "
                 />
@@ -602,21 +562,25 @@ import {
 import ColorSlider from './ColorSlider.vue';
 import DialogPreview from './DialogPreview.vue';
 
-type PositionMode = 'left' | 'right' | 'single';
-interface CharacterSettings {
-  left: { scale: number; positionX: number; positionY: number };
-  right: { scale: number; positionX: number; positionY: number };
-  single: { scale: number; positionX: number; positionY: number };
+interface PositionSettings {
+  scale: number;
+  positionX: number;
+  positionY: number;
+}
+
+interface DualPositionSettings {
+  left: PositionSettings;
+  right: PositionSettings;
 }
 
 interface Props {
   onClose: () => void;
   userDisplayName: string;
   onUserDisplayNameChange: (name: string) => void;
-  spriteSettings: CharacterSettings;
-  onSpriteSettingsChange: (settings: CharacterSettings) => void;
-  live2dSettings: CharacterSettings;
-  onLive2dSettingsChange: (settings: CharacterSettings) => void;
+  spriteSettings: DualPositionSettings;
+  onSpriteSettingsChange: (settings: DualPositionSettings) => void;
+  live2dSettings: DualPositionSettings;
+  onLive2dSettingsChange: (settings: DualPositionSettings) => void;
   autoPlay: boolean;
   onAutoPlayChange: (autoPlay: boolean) => void;
   autoPlaySpeed: number;
@@ -632,37 +596,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const activeTab = ref<'shapes' | 'colors'>('shapes');
-
-// 位置模式切换器状态
-const spritePositionMode = ref<PositionMode>('single');
-const live2dPositionMode = ref<PositionMode>('single');
-
-// 获取当前模式的设置，带有防御性检查
-const currentSpriteSettings = computed(() => {
-  const mode = spritePositionMode.value;
-  if (!props.spriteSettings || typeof props.spriteSettings !== 'object') {
-    return { scale: 1.0, positionX: 30, positionY: 50 };
-  }
-  const settings = props.spriteSettings[mode];
-  if (!settings || typeof settings !== 'object' || typeof settings.scale !== 'number') {
-    // 如果数据格式不正确，返回默认值
-    return { scale: 1.0, positionX: 30, positionY: 50 };
-  }
-  return settings;
-});
-
-const currentLive2dSettings = computed(() => {
-  const mode = live2dPositionMode.value;
-  if (!props.live2dSettings || typeof props.live2dSettings !== 'object') {
-    return { scale: 1.0, positionX: 30, positionY: 50 };
-  }
-  const settings = props.live2dSettings[mode];
-  if (!settings || typeof settings !== 'object' || typeof settings.scale !== 'number') {
-    // 如果数据格式不正确，返回默认值
-    return { scale: 1.0, positionX: 30, positionY: 50 };
-  }
-  return settings;
-});
+const currentSpriteSide = ref<'left' | 'right'>('left');
+const currentLive2dSide = ref<'left' | 'right'>('left');
 
 const hasChanges = computed(() => {
   return JSON.stringify(props.dialogStyle) !== JSON.stringify(props.currentAppliedStyle);
@@ -672,12 +607,21 @@ function updateUserDisplayName(name: string) {
   props.onUserDisplayNameChange(name);
 }
 
-function updateSpriteSettings(settings: CharacterSettings) {
-  props.onSpriteSettingsChange(settings);
+const displayedSpriteSettings = computed(() => props.spriteSettings[currentSpriteSide.value]);
+const displayedLive2dSettings = computed(() => props.live2dSettings[currentLive2dSide.value]);
+
+function updateSpriteSettings(settings: PositionSettings) {
+  props.onSpriteSettingsChange({
+    ...props.spriteSettings,
+    [currentSpriteSide.value]: settings,
+  });
 }
 
-function updateLive2dSettings(settings: CharacterSettings) {
-  props.onLive2dSettingsChange(settings);
+function updateLive2dSettings(settings: PositionSettings) {
+  props.onLive2dSettingsChange({
+    ...props.live2dSettings,
+    [currentLive2dSide.value]: settings,
+  });
 }
 
 function updateShape(key: keyof DialogBoxStyle, value: string) {

@@ -750,6 +750,22 @@ export async function parseMessageBlocks(
       // 注意：角色名可以是 <user>、{{user}} 或任何其他名字，都当作普通角色名处理
       block.character = characterName;
 
+      // 检查是否是离场指令：[[character||角色名：{{角色名}}||离场]]
+      const shouldExit = kvPairs['离场'] !== undefined || 
+                         kvPairs['exit'] !== undefined || 
+                         kvPairs['动作'] === '离场' || 
+                         kvPairs['motion'] === 'exit' ||
+                         kvPairs['表情'] === '离场' ||
+                         kvPairs['expression'] === 'exit';
+      
+      if (shouldExit) {
+        // 标记为离场，离场单元不包含台词，作为独立的分割标记
+        block.shouldExit = true;
+        block.text = ''; // 离场单元不显示台词
+        blocks.push(block);
+        continue;
+      }
+
       // 检查是否有CG场景（只有明确指定CG场景时才进入CG模式）
       const cgScene = kvPairs['CG场景'] || kvPairs['cg场景'] || kvPairs['CG'] || kvPairs['cg'];
       if (cgScene) {

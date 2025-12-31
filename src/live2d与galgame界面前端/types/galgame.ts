@@ -65,6 +65,10 @@ export interface DialogueItem {
 
   // ===== 阅读状态 =====
   isRead?: boolean; // 是否已读，默认为 false（未读）
+
+  // ===== 角色在场标记 =====
+  isCharacterEntrance?: boolean; // 是否为角色首次出现的单元（用于回顾时分割）
+  isCharacterExit?: boolean; // 是否为角色离场的单元（用于回顾时分割）
 }
 
 export interface ChoiceOption {

@@ -90,11 +90,13 @@ async function ensureRendererReady(): Promise<boolean> {
 
 // 立绘容器样式（仅用于静态图片）
 const spriteContainerStyle = computed(() => {
+  // 使用绝对定位，不使用 translateX 偏移，避免在右侧时被推出屏幕
+  // 使用 transformOrigin 来控制缩放中心点
   return {
     left: `${props.spritePositionX}%`,
     bottom: `${100 - props.spritePositionY}%`,
-    transform: `translateX(-50%) scale(${props.spriteScale})`,
-    transformOrigin: 'bottom center',
+    transform: `scale(${props.spriteScale})`,
+    transformOrigin: 'bottom left', // 以左下角为缩放中心，避免被推出屏幕
   };
 });
 

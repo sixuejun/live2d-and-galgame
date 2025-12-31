@@ -25,12 +25,16 @@ export interface Live2DMotionConfig {
 export interface ModelResourceWorldbookData {
   type: 'live2d_model';
   modelName: string;
+  version?: number; // 模型版本：2 (Cubism 2.1), 3 (Cubism 3), 4 (Cubism 4)
   files: {
     model3?: string;
+    model?: string; // Cubism 2.1 model.json
     moc3?: string;
+    moc?: string; // Cubism 2.1 .moc
     textures: string[];
     cdi3?: string;
     physics3?: string;
+    physics?: string; // Cubism 2.1 physics
   };
   motions: Live2DMotionConfig[];
   defaultAnimation?: {

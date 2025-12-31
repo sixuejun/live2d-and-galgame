@@ -1,16 +1,14 @@
 /**
  * Pixi Live2D 渲染器
  * 使用 pixi-live2d-display 库来渲染 Live2D 模型
- * 支持 Cubism 3 和 Cubism 4 模型
  */
 
 import { Live2DModel } from 'pixi-live2d-display';
 import * as PIXI from 'pixi.js';
 import { live2dModelManager } from '../managers/Live2DModelManager';
-import type { ILive2DRenderer, Live2DModelConfig as ILive2DModelConfig } from './ILive2DRenderer';
 
-// Live2D 模型配置接口（向后兼容的扩展版本）
-export interface Live2DModelConfig extends Partial<ILive2DModelConfig> {
+// Live2D 模型配置接口
+export interface Live2DModelConfig {
   id: string;
   name: string;
   modelPath: string;
@@ -44,9 +42,8 @@ export interface Live2DModelConfig extends Partial<ILive2DModelConfig> {
 /**
  * Pixi Live2D 渲染器类
  * 使用 pixi-live2d-display 加载和渲染 Live2D 模型
- * 实现 ILive2DRenderer 接口以支持统一的渲染器管理
  */
-export class PixiLive2DRenderer implements ILive2DRenderer {
+export class PixiLive2DRenderer {
   private canvas: HTMLCanvasElement | null = null;
   private app: PIXI.Application | null = null;
   private model: Live2DModel | null = null;
@@ -99,9 +96,9 @@ export class PixiLive2DRenderer implements ILive2DRenderer {
       this.canvas = canvas;
 
       // 创建 Pixi 应用实例（使用后备值确保不为 0）
-      // pixi.js 7.4.3 的 Application 构造函数参数
       this.app = new PIXI.Application({
         view: canvas,
+        autoStart: true,
         width: canvasWidth,
         height: canvasHeight,
         backgroundColor: 0x000000,
@@ -166,10 +163,7 @@ export class PixiLive2DRenderer implements ILive2DRenderer {
       this.model = model;
       this.config = config;
 
-      // 将模型添加到舞台（确保app和stage存在）
-      if (!this.app || !this.app.stage) {
-        throw new Error('Pixi Application 或 Stage 未初始化');
-      }
+      // 将模型添加到舞台
       this.app.stage.addChild(model as any);
 
       // 设置模型锚点为底部中心，符合 Galgame 风格
@@ -406,12 +400,8 @@ export class PixiLive2DRenderer implements ILive2DRenderer {
    */
   unloadModel(): void {
     if (this.model && this.app) {
-      try {
-        this.app.stage.removeChild(this.model as any);
-        this.model.destroy();
-      } catch (error) {
-        console.warn('[PixiLive2DRenderer] 卸载模型时出错:', error);
-      }
+      this.app.stage.removeChild(this.model as any);
+      this.model.destroy();
       this.model = null;
     }
     this.config = null;
@@ -424,25 +414,8 @@ export class PixiLive2DRenderer implements ILive2DRenderer {
     this.unloadModel();
 
     if (this.app) {
-      try {
-        // pixi.js 7.4.3: 销毁 renderer，然后清理 Application
-        if (this.app.renderer && typeof this.app.renderer.destroy === 'function') {
-          this.app.renderer.destroy(true);
-        }
-        
-        // 清理 stage
-        if (this.app.stage) {
-          this.app.stage.destroy({ children: true });
-        }
-        
-        // Application 在 pixi.js 7 中可能没有 destroy 方法
-        // 或者需要不同的调用方式，直接设置为 null
-        this.app = null;
-      } catch (error) {
-        console.warn('[PixiLive2DRenderer] 销毁应用时出错:', error);
-        // 即使出错也设置为 null，避免内存泄漏
-        this.app = null;
-      }
+      this.app.destroy(true, { children: true, texture: true, baseTexture: true });
+      this.app = null;
     }
 
     this.canvas = null;

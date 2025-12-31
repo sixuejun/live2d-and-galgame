@@ -21,22 +21,38 @@
     <!-- 绿色清新滤镜叠加 -->
     <div class="bg-primary/5 absolute inset-0" />
 
-    <!-- 角色立绘 - 支持多角色显示 -->
+    <!-- 左侧角色 -->
     <CharacterSprite
-      v-for="(character, index) in displayCharacters"
-      :key="`character-${index}-${character.name}`"
-      :sprite-scale="character.scale"
-      :sprite-position-x="character.positionX"
-      :sprite-position-y="character.positionY"
-      :live2d-scale="character.scale"
-      :live2d-position-x="character.positionX"
-      :live2d-position-y="character.positionY"
-      :sprite-type="character.type"
-      :image-url="character.imageUrl"
-      :live2d-model-id="character.modelId"
+      v-if="leftCharacterConfig"
+      :sprite-scale="safeSpriteSettings.left.scale"
+      :sprite-position-x="safeSpriteSettings.left.positionX"
+      :sprite-position-y="safeSpriteSettings.left.positionY"
+      :live2d-scale="safeLive2dSettings.left.scale"
+      :live2d-position-x="safeLive2dSettings.left.positionX"
+      :live2d-position-y="safeLive2dSettings.left.positionY"
+      :sprite-type="leftCharacterConfig.spriteType"
+      :image-url="leftCharacterConfig.imageUrl"
+      :live2d-model-id="leftCharacterConfig.live2dModelId"
       :live2d-models="live2dModels"
-      :motion="character.motion"
-      :expression="character.expression"
+      :motion="leftCharacterConfig.motion"
+      :expression="leftCharacterConfig.expression"
+    />
+
+    <!-- 右侧角色 -->
+    <CharacterSprite
+      v-if="rightCharacterConfig"
+      :sprite-scale="safeSpriteSettings.right.scale"
+      :sprite-position-x="safeSpriteSettings.right.positionX"
+      :sprite-position-y="safeSpriteSettings.right.positionY"
+      :live2d-scale="safeLive2dSettings.right.scale"
+      :live2d-position-x="safeLive2dSettings.right.positionX"
+      :live2d-position-y="safeLive2dSettings.right.positionY"
+      :sprite-type="rightCharacterConfig.spriteType"
+      :image-url="rightCharacterConfig.imageUrl"
+      :live2d-model-id="rightCharacterConfig.live2dModelId"
+      :live2d-models="live2dModels"
+      :motion="rightCharacterConfig.motion"
+      :expression="rightCharacterConfig.expression"
     />
 
     <!-- CG图片（CG模式） -->
@@ -277,6 +293,19 @@
     </div>
 
     <!-- 对话框 -->
+    <!-- 离场标记（独立显示，不使用 DialogBox） -->
+    <div
+      v-if="!blackScreen && !showChoices && currentDialogue && currentDialogue.isCharacterExit && !currentDialogue.text"
+      class="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
+    >
+      <div
+        class="rounded-full border border-gray-600/30 bg-gray-800/50 px-6 py-2 text-sm text-gray-300 italic backdrop-blur-sm"
+      >
+        {{ currentDialogue.character }} 离场
+      </div>
+    </div>
+
+    <!-- 普通对话框 -->
     <DialogBox
       v-if="
         !blackScreen &&
@@ -284,6 +313,7 @@
         currentDialogue &&
         currentDialogue.type !== 'blackscreen' &&
         currentDialogue.type !== 'choice' &&
+        !currentDialogue.isCharacterExit &&
         getDisplayText()
       "
       :character="currentDialogue.character || ''"
@@ -547,13 +577,6 @@ import type { ChoiceOption, DialogBoxStyle, DialogueItem } from '../types/galgam
 import { defaultDialogStyle } from '../types/galgame';
 import type { MessageBlock } from '../types/message';
 import {
-  CharacterStateManager,
-  createCharacterConfig,
-  detectCharacterExit,
-  type CharacterDisplayConfig,
-  type CharacterSettings,
-} from '../utils/characterParser';
-import {
   hasMotionAndExpression,
   loadWorldbookResources,
   parseMessageBlocks,
@@ -641,22 +664,82 @@ const phonePanelRef = ref<InstanceType<typeof PhonePanel> | null>(null);
 // 移除流式界面状态（已取消流式功能）
 
 // 样式设置 - 从 localStorage 加载
-// 立绘设置（静态图片）- 支持左、右、单角色三种模式的独立设置
-const defaultSpriteSettings: CharacterSettings = {
-  left: { scale: 1.15, positionX: 30, positionY: 50 }, // 左侧：30%，缩放115%
-  right: { scale: 1.15, positionX: 70, positionY: 50 }, // 右侧：70%，缩放115%
-  single: { scale: 1.0, positionX: 30, positionY: 50 }, // 单角色：30%，缩放100%
-};
+// 立绘和 Live2D 设置现在支持左右两侧独立配置
+interface PositionSettings {
+  scale: number;
+  positionX: number;
+  positionY: number;
+}
 
-const defaultLive2dSettings: CharacterSettings = {
-  left: { scale: 1.15, positionX: 30, positionY: 50 }, // 左侧：30%，缩放115%
-  right: { scale: 1.15, positionX: 70, positionY: 50 }, // 右侧：70%，缩放115%
-  single: { scale: 1.0, positionX: 30, positionY: 50 }, // 单角色：30%，缩放100%
-};
+interface DualPositionSettings {
+  left: PositionSettings;
+  right: PositionSettings;
+}
 
-const spriteSettings = ref<CharacterSettings>(loadFromStorage(STORAGE_KEYS.SPRITE_SETTINGS, defaultSpriteSettings));
+function migrateSpriteSettings(stored: any): DualPositionSettings {
+  const defaultLeft: PositionSettings = { scale: 1.15, positionX: 24, positionY: 120 };
+  const defaultRight: PositionSettings = { scale: 1.15, positionX: 76, positionY: 120 };
 
-const live2dSettings = ref<CharacterSettings>(loadFromStorage(STORAGE_KEYS.LIVE2D_SETTINGS, defaultLive2dSettings));
+  if (!stored || typeof stored !== 'object') {
+    return { left: defaultLeft, right: defaultRight };
+  }
+
+  // 如果已经是新格式（有 left/right）
+  if (stored.left && stored.right) {
+    return { left: stored.left, right: stored.right };
+  }
+
+  // 如果是旧格式（直接在根级别），迁移到 left，right 使用默认值
+  if (
+    typeof stored.scale === 'number' &&
+    typeof stored.positionX === 'number' &&
+    typeof stored.positionY === 'number'
+  ) {
+    return {
+      left: { scale: stored.scale, positionX: stored.positionX, positionY: stored.positionY },
+      right: defaultRight,
+    };
+  }
+
+  // 否则使用默认值
+  return { left: defaultLeft, right: defaultRight };
+}
+
+function migrateLive2dSettings(stored: any): DualPositionSettings {
+  const defaultLeft: PositionSettings = { scale: 1.15, positionX: 24, positionY: 120 };
+  const defaultRight: PositionSettings = { scale: 1.15, positionX: 76, positionY: 120 };
+
+  if (!stored || typeof stored !== 'object') {
+    return { left: defaultLeft, right: defaultRight };
+  }
+
+  // 如果已经是新格式（有 left/right）
+  if (stored.left && stored.right) {
+    return { left: stored.left, right: stored.right };
+  }
+
+  // 如果是旧格式（直接在根级别），迁移到 left，right 使用默认值
+  if (
+    typeof stored.scale === 'number' &&
+    typeof stored.positionX === 'number' &&
+    typeof stored.positionY === 'number'
+  ) {
+    return {
+      left: { scale: stored.scale, positionX: stored.positionX, positionY: stored.positionY },
+      right: defaultRight,
+    };
+  }
+
+  // 否则使用默认值
+  return { left: defaultLeft, right: defaultRight };
+}
+
+const spriteSettings = ref<DualPositionSettings>(
+  migrateSpriteSettings(loadFromStorage(STORAGE_KEYS.SPRITE_SETTINGS, null)),
+);
+const live2dSettings = ref<DualPositionSettings>(
+  migrateLive2dSettings(loadFromStorage(STORAGE_KEYS.LIVE2D_SETTINGS, null)),
+);
 const dialogStyle = ref<DialogBoxStyle>(loadFromStorage(STORAGE_KEYS.DIALOG_STYLE, defaultDialogStyle));
 const previewStyle = ref<DialogBoxStyle>({ ...dialogStyle.value });
 
@@ -668,50 +751,21 @@ const live2dModels = shallowRef<any[]>([]);
 // Live2D 世界书资源缓存
 const live2dWorldbookModels = shallowRef<Map<string, any>>(new Map());
 
-// 工具函数：迁移旧格式的设置数据到新格式
-function migrateOldSettings(oldData: any): CharacterSettings | null {
-  // 检查是否是旧格式（有 scale, positionX, positionY 但没有 left, right, single）
-  if (
-    oldData &&
-    typeof oldData === 'object' &&
-    'scale' in oldData &&
-    'positionX' in oldData &&
-    'positionY' in oldData &&
-    !('left' in oldData) &&
-    !('right' in oldData) &&
-    !('single' in oldData)
-  ) {
-    // 旧格式：{ scale, positionX, positionY }
-    // 转换为新格式：{ left, right, single }
-    const oldScale = oldData.scale ?? 1.15;
-    return {
-      left: { scale: oldScale, positionX: 30, positionY: 50 },
-      right: { scale: oldScale, positionX: 70, positionY: 50 },
-      single: { scale: 1.0, positionX: 30, positionY: 50 },
-    };
-  }
-  return null;
+// 活跃角色列表（最多2个角色）
+interface ActiveCharacter {
+  name: string;
+  lastSpokeIndex: number;
+  position: 'left' | 'right';
 }
 
-// 工具函数：从 localStorage 加载数据，支持数据迁移
+const activeCharacters = ref<ActiveCharacter[]>([]);
+
+// 工具函数：从 localStorage 加载数据
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const stored = localStorage.getItem(key);
     if (stored) {
-      const parsed = JSON.parse(stored);
-
-      // 如果是设置相关的 key，检查是否需要迁移
-      if (key === STORAGE_KEYS.SPRITE_SETTINGS || key === STORAGE_KEYS.LIVE2D_SETTINGS) {
-        const migrated = migrateOldSettings(parsed);
-        if (migrated) {
-          // 保存迁移后的数据
-          localStorage.setItem(key, JSON.stringify(migrated));
-          console.info(`[GalgamePlayer] 已迁移 ${key} 数据格式`);
-          return migrated as T;
-        }
-      }
-
-      return parsed as T;
+      return JSON.parse(stored) as T;
     }
   } catch (e) {
     console.warn(`从 localStorage 加载 ${key} 失败:`, e);
@@ -752,6 +806,35 @@ watch(
   },
   { deep: true },
 );
+
+// 确保设置值总是有效的（防御性编程）
+const safeSpriteSettings = computed(() => {
+  const settings = spriteSettings.value;
+  const ensureSafe = (s: any): PositionSettings => ({
+    scale: typeof s?.scale === 'number' && !isNaN(s.scale) ? s.scale : 1.15,
+    positionX: typeof s?.positionX === 'number' && !isNaN(s.positionX) ? s.positionX : 24,
+    positionY: typeof s?.positionY === 'number' && !isNaN(s.positionY) ? s.positionY : 120,
+  });
+
+  return {
+    left: ensureSafe(settings?.left),
+    right: ensureSafe(settings?.right),
+  };
+});
+
+const safeLive2dSettings = computed(() => {
+  const settings = live2dSettings.value;
+  const ensureSafe = (s: any): PositionSettings => ({
+    scale: typeof s?.scale === 'number' && !isNaN(s.scale) ? s.scale : 1.15,
+    positionX: typeof s?.positionX === 'number' && !isNaN(s.positionX) ? s.positionX : 24,
+    positionY: typeof s?.positionY === 'number' && !isNaN(s.positionY) ? s.positionY : 120,
+  });
+
+  return {
+    left: ensureSafe(settings?.left),
+    right: ensureSafe(settings?.right),
+  };
+});
 
 // 容器样式 - 横屏显示，等比例缩放（适配iframe）
 // 遵循前端界面规则：使用 width 和 aspect-ratio，禁止使用 vh 等受宿主高度影响的单位
@@ -808,209 +891,189 @@ const backgroundImage = computed(() => {
   return null;
 });
 
-// 角色状态管理器（管理在场角色）
-const characterStateManager = new CharacterStateManager();
-
-// 为每个演出单元计算角色状态快照（用于回顾时保持正确的角色显示模式）
-function computeCharacterStateSnapshot(
-  dialogues: DialogueItem[],
-  targetIndex: number,
-): {
-  charactersBefore: string[];
-  charactersAfter: string[];
-  isNewCharacterEntry: boolean;
-  isCharacterExit: boolean;
-} {
-  const snapshotManager = new CharacterStateManager();
-  let isNewCharacterEntry = false;
-  let isCharacterExit = false;
-
-  // 从第一个对话开始，逐个处理到目标索引之前
-  for (let i = 0; i < targetIndex; i++) {
-    const d = dialogues[i];
-    if (!d) continue;
-
-    // CG模式不处理角色状态
-    if (d.isCG || d.type === 'cg') {
-      snapshotManager.clearAll();
-      continue;
-    }
-
-    // 检测离场标记（优先从文本检测，如果文本包含"离场"关键字则使用character字段）
-    let exitCharacter = d.text ? detectCharacterExit(d.text) : null;
-    if (!exitCharacter && d.character && d.text && d.text.includes('离场')) {
-      exitCharacter = d.character;
-    }
-
-    if (exitCharacter) {
-      snapshotManager.processDialogue(exitCharacter, true);
-    } else if (d.character) {
-      snapshotManager.processDialogue(d.character, false);
-    }
+// 当前立绘配置
+const currentSpriteType = computed<'live2d' | 'image' | 'none'>(() => {
+  const dialogue = currentDialogue.value;
+  if (dialogue?.sprite?.type) {
+    console.info('[GalgamePlayer] currentSpriteType: 从 dialogue.sprite.type 获取', dialogue.sprite.type);
+    return dialogue.sprite.type;
   }
-
-  // 获取目标索引之前的状态
-  const charactersBefore = snapshotManager.getOnStageCharacters();
-
-  // 处理目标索引的对话，检查是否是新角色登场或角色离场
-  const targetDialogue = dialogues[targetIndex];
-  if (targetDialogue && !targetDialogue.isCG && targetDialogue.type !== 'cg') {
-    // 检测离场标记（优先从文本检测，如果文本包含"离场"关键字则使用character字段）
-    let exitCharacter = targetDialogue.text ? detectCharacterExit(targetDialogue.text) : null;
-    if (!exitCharacter && targetDialogue.character && targetDialogue.text && targetDialogue.text.includes('离场')) {
-      exitCharacter = targetDialogue.character;
-    }
-
-    if (exitCharacter) {
-      // 角色离场
-      isCharacterExit = true;
-      snapshotManager.processDialogue(exitCharacter, true);
-    } else if (targetDialogue.character) {
-      // 检查是否是新角色登场
-      const beforeEntry = snapshotManager.getOnStageCharacters();
-      if (!beforeEntry.includes(targetDialogue.character)) {
-        isNewCharacterEntry = true;
-      }
-      snapshotManager.processDialogue(targetDialogue.character, false);
-    }
+  // CG模式不显示立绘
+  if (dialogue?.isCG || dialogue?.type === 'cg') {
+    console.info('[GalgamePlayer] currentSpriteType: CG模式，返回 none');
+    return 'none';
   }
+  // 默认：根据是否有 Live2D 模型或立绘资源来决定
+  if (dialogue?.character) {
+    const hasLive2d = live2dModels.value.some(m => m.name === dialogue.character);
+    const hasImage = !!dialogue.sprite?.imageUrl;
+    console.info('[GalgamePlayer] currentSpriteType: 自动判断', {
+      character: dialogue.character,
+      hasLive2d,
+      hasImage,
+      availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+    });
+    if (hasLive2d) return 'live2d';
+    if (hasImage) return 'image';
+    return 'none'; // 如果都没有，不显示
+  }
+  console.info('[GalgamePlayer] currentSpriteType: 无角色名，返回 none');
+  return 'none';
+});
 
-  return {
-    charactersBefore,
-    charactersAfter: snapshotManager.getOnStageCharacters(),
-    isNewCharacterEntry,
-    isCharacterExit,
-  };
+const currentImageUrl = computed(() => {
+  const dialogue = currentDialogue.value;
+  return dialogue?.sprite?.imageUrl || '/placeholder-user.jpg';
+});
+
+const currentLive2dModelId = computed(() => {
+  const dialogue = currentDialogue.value;
+  if (dialogue?.sprite?.live2dModelId) {
+    // dialogue.sprite.live2dModelId 是在创建 dialogue 时从世界书匹配得到的
+    // （通过 loadWorldbookResources() -> live2dModels.value -> 根据角色名匹配）
+    console.info('[GalgamePlayer] currentLive2dModelId: 使用已匹配的模型ID（来自世界书）', {
+      modelId: dialogue.sprite.live2dModelId,
+      character: dialogue.character,
+      source: 'dialogue.sprite.live2dModelId (在创建dialogue时从世界书匹配)',
+    });
+    return dialogue.sprite.live2dModelId;
+  }
+  // 自动匹配：根据角色名从世界书加载的模型列表中查找
+  if (dialogue?.character) {
+    const model = live2dModels.value.find(m => m.name === dialogue.character);
+    console.info('[GalgamePlayer] currentLive2dModelId: 从世界书模型列表中匹配角色名', {
+      character: dialogue.character,
+      foundModel: model ? { id: model.id, name: model.name } : null,
+      availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+      source: 'live2dModels.value (从世界书加载)',
+    });
+    return model?.id;
+  }
+  console.info('[GalgamePlayer] currentLive2dModelId: 未找到模型ID', {
+    hasDialogue: !!dialogue,
+    hasCharacter: !!dialogue?.character,
+    availableModels: live2dModels.value.map(m => ({ id: m.id, name: m.name })),
+  });
+  return undefined;
+});
+
+// 双角色系统：左侧和右侧角色配置
+interface CharacterConfig {
+  spriteType: 'live2d' | 'image' | 'none';
+  imageUrl?: string;
+  live2dModelId?: string;
+  motion?: string;
+  expression?: string;
 }
 
-// 解析并返回当前需要显示的所有角色（自动管理双角色显示）
-const displayCharacters = computed<CharacterDisplayConfig[]>(() => {
+const leftCharacterConfig = computed<CharacterConfig | null>(() => {
+  const leftChar = activeCharacters.value.find(c => c.position === 'left');
+  if (!leftChar) return null;
+
   const dialogue = currentDialogue.value;
 
-  if (!dialogue) {
-    return [];
+  // 如果当前对话是该角色，使用对话中的配置（包括动作/表情）
+  if (dialogue?.character === leftChar.name) {
+    return {
+      spriteType: currentSpriteType.value,
+      imageUrl: currentImageUrl.value,
+      live2dModelId: currentLive2dModelId.value,
+      motion: dialogue.motion,
+      expression: dialogue.expression,
+    };
   }
 
-  // CG模式不显示角色
-  if (dialogue.isCG || dialogue.type === 'cg') {
-    // CG模式时清空在场角色
-    characterStateManager.clearAll();
-    return [];
+  // 否则从历史对话中查找该角色最后一次的配置，保持显示但无动作/表情
+  const lastDialogue = dialogues.value
+    .slice(0, currentDialogIndex.value + 1) // 只查找到当前位置之前
+    .reverse()
+    .find(d => d.character === leftChar.name && d.sprite);
+
+  if (lastDialogue?.sprite) {
+    return {
+      spriteType: lastDialogue.sprite.type,
+      imageUrl: lastDialogue.sprite.imageUrl,
+      live2dModelId: lastDialogue.sprite.live2dModelId,
+      motion: undefined, // 不播放动作
+      expression: undefined, // 不显示表情
+    };
   }
 
-  const currentIndex = currentDialogIndex.value;
-  const isReviewing = currentIndex < dialogues.value.length - 1;
-
-  let onStageCharacters: string[];
-  let reviewSnapshotManager: CharacterStateManager | null = null;
-
-  if (isReviewing) {
-    // 回顾模式：使用快照来决定角色状态
-    const snapshot = computeCharacterStateSnapshot(dialogues.value, currentIndex);
-
-    // 如果当前演出单元是新角色登场，回顾之前的应该保持单角色模式（只显示第一个角色）
-    // 如果当前演出单元是角色离场，回顾之前的应该保持双角色模式（显示离场前的两个角色）
-    if (snapshot.isNewCharacterEntry) {
-      // 新角色登场：回顾时保持单角色模式（只显示之前的第一个角色）
-      onStageCharacters = snapshot.charactersBefore.slice(0, 1);
-      // 创建一个临时的状态管理器来计算位置
-      reviewSnapshotManager = new CharacterStateManager();
-      snapshot.charactersBefore.slice(0, 1).forEach(char => {
-        reviewSnapshotManager!.processDialogue(char, false);
-      });
-    } else if (snapshot.isCharacterExit) {
-      // 角色离场：回顾时保持双角色模式（显示离场前的两个角色，即 charactersBefore）
-      // 确保最多显示2个角色
-      onStageCharacters = snapshot.charactersBefore.slice(0, 2);
-      // 创建一个临时的状态管理器来计算位置
-      reviewSnapshotManager = new CharacterStateManager();
-      snapshot.charactersBefore.slice(0, 2).forEach(char => {
-        reviewSnapshotManager!.processDialogue(char, false);
-      });
-    } else {
-      // 其他情况，使用之前的状态（保持原有逻辑）
-      onStageCharacters = snapshot.charactersBefore;
-      // 创建一个临时的状态管理器来计算位置
-      reviewSnapshotManager = new CharacterStateManager();
-      snapshot.charactersBefore.forEach(char => {
-        reviewSnapshotManager!.processDialogue(char, false);
-      });
-    }
-  } else {
-    // 正常播放模式：实时更新角色状态
-    // 检测离场标记（优先从文本中检测，如果没有则从character字段获取）
-    let exitCharacter = dialogue.text ? detectCharacterExit(dialogue.text) : null;
-
-    // 如果文本中没有检测到离场标记，但dialogue.character存在且文本中包含"离场"关键字，使用character字段
-    if (!exitCharacter && dialogue.character && dialogue.text && dialogue.text.includes('离场')) {
-      exitCharacter = dialogue.character;
-    }
-
-    // 更新角色状态
-    // 如果有离场标记，传入离场的角色名；否则传入当前对话的角色名
-    onStageCharacters = exitCharacter
-      ? characterStateManager.processDialogue(exitCharacter, true)
-      : characterStateManager.processDialogue(dialogue.character, false);
+  // 如果没有历史配置，尝试使用模型默认配置
+  const model = live2dModels.value.find(m => m.name === leftChar.name);
+  if (model) {
+    return {
+      spriteType: 'live2d',
+      imageUrl: undefined,
+      live2dModelId: model.id || model.name,
+      motion: undefined,
+      expression: undefined,
+    };
   }
 
-  // 如果没有在场角色，返回空数组
-  if (onStageCharacters.length === 0) {
-    return [];
+  // 如果都没有，不显示
+  return {
+    spriteType: 'none',
+    imageUrl: undefined,
+    live2dModelId: undefined,
+    motion: undefined,
+    expression: undefined,
+  };
+});
+
+const rightCharacterConfig = computed<CharacterConfig | null>(() => {
+  const rightChar = activeCharacters.value.find(c => c.position === 'right');
+  if (!rightChar) return null;
+
+  const dialogue = currentDialogue.value;
+
+  // 如果当前对话是该角色，使用对话中的配置（包括动作/表情）
+  if (dialogue?.character === rightChar.name) {
+    return {
+      spriteType: currentSpriteType.value,
+      imageUrl: currentImageUrl.value,
+      live2dModelId: currentLive2dModelId.value,
+      motion: dialogue.motion,
+      expression: dialogue.expression,
+    };
   }
 
-  // 为每个在场角色创建显示配置
-  const manager = reviewSnapshotManager || characterStateManager;
-  return onStageCharacters
-    .map(charName => {
-      const position = manager.getCharacterPosition(charName);
-      const totalCount = onStageCharacters.length;
+  // 否则从历史对话中查找该角色最后一次的配置，保持显示但无动作/表情
+  const lastDialogue = dialogues.value
+    .slice(0, currentDialogIndex.value + 1) // 只查找到当前位置之前
+    .reverse()
+    .find(d => d.character === rightChar.name && d.sprite);
 
-      // 确定角色类型（live2d / image / none）
-      // 优先查找 Live2D 模型
-      const live2dModel = live2dModels.value.find(m => m.name === charName);
+  if (lastDialogue?.sprite) {
+    return {
+      spriteType: lastDialogue.sprite.type,
+      imageUrl: lastDialogue.sprite.imageUrl,
+      live2dModelId: lastDialogue.sprite.live2dModelId,
+      motion: undefined, // 不播放动作
+      expression: undefined, // 不显示表情
+    };
+  }
 
-      let config: CharacterDisplayConfig;
+  // 如果没有历史配置，尝试使用模型默认配置
+  const model = live2dModels.value.find(m => m.name === rightChar.name);
+  if (model) {
+    return {
+      spriteType: 'live2d',
+      imageUrl: undefined,
+      live2dModelId: model.id || model.name,
+      motion: undefined,
+      expression: undefined,
+    };
+  }
 
-      if (live2dModel) {
-        // Live2D 模型：使用 live2dSettings
-        config = createCharacterConfig(charName, position, totalCount, live2dSettings.value, false);
-        config.type = 'live2d';
-        config.modelId = live2dModel.id;
-      } else {
-        // 如果没有 Live2D 模型，查找立绘资源
-        // 使用 spriteSettings
-        config = createCharacterConfig(charName, position, totalCount, spriteSettings.value, true);
-
-        // 如果是当前发言的角色，使用当前对话的立绘资源
-        if (dialogue.character === charName && dialogue.sprite?.imageUrl) {
-          config.type = 'image';
-          config.imageUrl = dialogue.sprite.imageUrl;
-        } else {
-          // 对于非当前发言的角色，尝试从历史对话中查找立绘
-          // 查找该角色最近一次对话中的立绘资源
-          const characterDialogue = dialogues.value
-            .slice()
-            .reverse()
-            .find(d => d.character === charName && d.sprite?.imageUrl);
-
-          if (characterDialogue?.sprite?.imageUrl) {
-            config.type = 'image';
-            config.imageUrl = characterDialogue.sprite.imageUrl;
-          } else {
-            config.type = 'none';
-          }
-        }
-      }
-
-      // 应用动作和表情（只给当前发言的角色）
-      if (dialogue.character === charName) {
-        config.motion = dialogue.motion;
-        config.expression = dialogue.expression;
-      }
-
-      return config;
-    })
-    .filter(char => char.type !== 'none'); // 过滤掉没有资源的角色
+  // 如果都没有，不显示
+  return {
+    spriteType: 'none',
+    imageUrl: undefined,
+    live2dModelId: undefined,
+    motion: undefined,
+    expression: undefined,
+  };
 });
 
 // 用户消息编辑状态（内存中）
@@ -1139,6 +1202,82 @@ function updateDialoguesIncremental(newDialogues: DialogueItem[]): boolean {
 }
 
 // 从酒馆读取对话数据
+// 更新活跃角色列表
+/**
+ * 更新活跃角色列表
+ * @returns { isEntrance: boolean, isExit: boolean } - 是否为首次出现和是否为离场
+ */
+function updateActiveCharacters(
+  characterName: string,
+  dialogueIndex: number,
+  shouldExit: boolean,
+): { isEntrance: boolean; isExit: boolean } {
+  if (!characterName) return { isEntrance: false, isExit: false };
+
+  if (shouldExit) {
+    // 角色离场，从列表中移除
+    const index = activeCharacters.value.findIndex(c => c.name === characterName);
+    if (index >= 0) {
+      activeCharacters.value.splice(index, 1);
+      console.info(
+        `[活跃角色] 角色 "${characterName}" 离场，当前活跃角色:`,
+        activeCharacters.value.map(c => c.name),
+      );
+
+      // 如果只剩一个角色，将其移到左侧
+      if (activeCharacters.value.length === 1) {
+        activeCharacters.value[0].position = 'left';
+      }
+    }
+    return { isEntrance: false, isExit: true };
+  }
+
+  // 查找是否已存在
+  const existingIndex = activeCharacters.value.findIndex(c => c.name === characterName);
+
+  if (existingIndex >= 0) {
+    // 角色已在列表中，更新最后发言索引
+    activeCharacters.value[existingIndex].lastSpokeIndex = dialogueIndex;
+    return { isEntrance: false, isExit: false };
+  } else {
+    // 新角色首次出现
+    if (activeCharacters.value.length >= 2) {
+      // 列表已满，移除最久未发言的角色
+      const oldestIndex = activeCharacters.value.reduce(
+        (minIdx, curr, idx, arr) => (curr.lastSpokeIndex < arr[minIdx].lastSpokeIndex ? idx : minIdx),
+        0,
+      );
+
+      const removed = activeCharacters.value[oldestIndex];
+      console.info(`[活跃角色] 列表已满，移除最久未发言的角色: "${removed.name}"`);
+
+      // 新角色继承被移除角色的位置
+      const position = removed.position;
+      activeCharacters.value.splice(oldestIndex, 1);
+
+      activeCharacters.value.push({
+        name: characterName,
+        lastSpokeIndex: dialogueIndex,
+        position,
+      });
+    } else {
+      // 列表未满，添加新角色
+      const position = activeCharacters.value.length === 0 ? 'left' : 'right';
+      activeCharacters.value.push({
+        name: characterName,
+        lastSpokeIndex: dialogueIndex,
+        position,
+      });
+    }
+
+    console.info(
+      `[活跃角色] 新角色 "${characterName}" 加入，当前活跃角色:`,
+      activeCharacters.value.map(c => c.name),
+    );
+    return { isEntrance: true, isExit: false };
+  }
+}
+
 async function loadDialoguesFromTavern() {
   try {
     const messages = getChatMessages('0-{{lastMessageId}}');
@@ -1252,6 +1391,16 @@ async function loadDialoguesFromTavern() {
       // StatusBlock 位于 <content> 之外，只用于状态栏显示，不创建对话项
       if (blocks.length === 0) {
         continue;
+      }
+
+      // 预先计算角色出现/离场状态（用于标记 dialogue）
+      const characterStatus = new Map<string, { isEntrance: boolean; isExit: boolean }>();
+      for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
+        if (block.type === 'character' && block.character) {
+          const status = updateActiveCharacters(block.character, newDialogues.length + i, !!block.shouldExit);
+          characterStatus.set(`${i}`, status);
+        }
       }
 
       // 解析StatusBlock（用于状态栏显示，不作为对话项）
@@ -1403,6 +1552,9 @@ async function loadDialoguesFromTavern() {
                   : '未设置isCG，使用默认逻辑',
           });
 
+          // 获取角色出现/离场状态
+          const status = characterStatus.get(`${blockIndex}`) || { isEntrance: false, isExit: false };
+
           const dialogue: DialogueItem = {
             unitId: `msg_${msg.message_id}_unit_${unitIndex}`,
             unitIndex: unitIndex++,
@@ -1419,6 +1571,8 @@ async function loadDialoguesFromTavern() {
             isCG: isCGMode,
             cgImageUrl: isCGMode ? block.cgImageUrl || block.scene : undefined, // 优先使用从世界书匹配到的CG URL
             statusBlock,
+            isCharacterEntrance: status.isEntrance, // 标记角色首次出现
+            isCharacterExit: status.isExit, // 标记角色离场
             sprite: isCGMode
               ? { type: 'none' } // CG模式不显示立绘
               : (() => {
@@ -1814,21 +1968,43 @@ async function loadLive2dModels() {
       console.info(`[GalgamePlayer] 从世界书加载到 ${resources.models.size} 个 Live2D 模型`);
 
       for (const [modelName, modelData] of resources.models.entries()) {
-        const model3Url = modelData.files?.model3 || '';
-        // 如果 model3 是完整 URL，直接使用；否则需要 basePath
-        const isFullUrl = model3Url.startsWith('http://') || model3Url.startsWith('https://');
+        // 检测模型版本：优先使用 model3，其次 model，最后 moc/moc3
+        let modelUrl = '';
+        let detectedVersion = 3; // 默认版本 3
+
+        if (modelData.files?.model3) {
+          modelUrl = modelData.files.model3;
+          detectedVersion = 3;
+        } else if (modelData.files?.model) {
+          modelUrl = modelData.files.model;
+          detectedVersion = 2;
+        } else if (modelData.files?.moc3) {
+          modelUrl = modelData.files.moc3;
+          detectedVersion = 3;
+        } else if (modelData.files?.moc) {
+          modelUrl = modelData.files.moc;
+          detectedVersion = 2;
+        }
+
+        // 如果世界书明确指定了版本，使用世界书的版本
+        if (modelData.version) {
+          detectedVersion = modelData.version;
+        }
+
+        // 如果 modelUrl 是完整 URL，直接使用；否则需要 basePath
+        const isFullUrl = modelUrl.startsWith('http://') || modelUrl.startsWith('https://');
         const basePath = isFullUrl
-          ? model3Url.substring(0, model3Url.lastIndexOf('/') + 1)
-          : model3Url.substring(0, model3Url.lastIndexOf('/') + 1);
-        // 如果 model3 是完整 URL，modelPath 使用完整 URL；否则只使用文件名
-        const modelPath = isFullUrl ? model3Url : model3Url ? model3Url.split('/').pop() : '';
+          ? modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1)
+          : modelUrl.substring(0, modelUrl.lastIndexOf('/') + 1);
+        // 如果是完整 URL，modelPath 使用完整 URL；否则只使用文件名
+        const modelPath = isFullUrl ? modelUrl : modelUrl ? modelUrl.split('/').pop() : '';
 
         const newModel: any = {
           name: modelName, // 使用modelName作为name（例如"程北极"）
           id: modelName, // 使用modelName作为id
           basePath,
           modelPath,
-          version: 3, // Live2D Cubism 3.0
+          version: detectedVersion, // 使用检测到的版本或世界书指定的版本
           textures: modelData.files?.textures || [],
           motions:
             modelData.motions?.map(m => ({
