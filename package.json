@@ -90,8 +90,12 @@
     "klona": "^2.0.6",
     "lodash": "^4.17.21",
     "pinia": "^3.0.4",
+<<<<<<< HEAD
     "pixi-live2d-display": "0.5.0-beta",
     "pixi.js": "^7.4.3",
+=======
+    "pixi.js": "^8.15.0",
+>>>>>>> a17361edcd8bc72f363b2accf0cd15361ec3f8de
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "toastr": "^2.1.4",
