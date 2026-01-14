@@ -8,9 +8,15 @@ importers:
 
   .:
     dependencies:
+<<<<<<< HEAD
       '@pixi/core':
         specifier: 7.4.3
         version: 7.4.3
+=======
+      '@pixi/react':
+        specifier: 8.0.0-beta.25
+        version: 8.0.0-beta.25(@types/react@19.2.8)(pixi.js@8.15.0)(react@19.2.3)
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
       '@vueuse/components':
         specifier: ^14.1.0
         version: 14.1.0(vue@3.5.26(typescript@6.0.0-dev.20250807))
@@ -54,8 +60,13 @@ importers:
         specifier: 0.5.0-beta
         version: 0.5.0-beta(pixi.js@7.4.3)
       pixi.js:
+<<<<<<< HEAD
         specifier: ^7.4.3
         version: 7.4.3
+=======
+        specifier: ^8.15.0
+        version: 8.15.0
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
       react:
         specifier: ^19.2.3
         version: 19.2.3
@@ -267,6 +278,9 @@ importers:
       webpack-obfuscator:
         specifier: ^3.6.0
         version: 3.6.0(javascript-obfuscator@4.2.2)(webpack@5.104.1)
+      yaml-loader:
+        specifier: ^0.9.0
+        version: 0.9.0
 
 packages:
 
@@ -905,6 +919,14 @@ packages:
     peerDependencies:
       '@types/react': ^19.2.0
 
+<<<<<<< HEAD
+=======
+  '@types/react-reconciler@0.28.9':
+    resolution: {integrity: sha512-HHM3nxyUZ3zAylX8ZEyrDNd2XZOnQ0D5XfunJF5FLQnZbHHYq4UWvW1QfelQNXv1ICNkwYhfxjwfnqivYB6bFg==}
+    peerDependencies:
+      '@types/react': '*'
+
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
   '@types/react@19.2.8':
     resolution: {integrity: sha512-3MbSL37jEchWZz2p2mjntRZtPt837ij10ApxKfgmXCTuHWagYg7iA5bqPw6C8BMPfwidlvfPI/fxOc42HLhcyg==}
 
@@ -2631,6 +2653,9 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  javascript-stringify@2.1.0:
+    resolution: {integrity: sha512-JVAfqNPTvNq3sB/VHQJAFxN/sPgKnsKrCwyRt15zwNCdrMMJDdcEOdubuy+DuJYYdm0ox1J4uzEuYKkN+9yhVg==}
+
   jest-util@29.7.0:
     resolution: {integrity: sha512-z6EbKajIpqGKU56y5KBUgy1dt1ihhQJgWzUlZHArA/+X2ad7Cb5iF+AK1EWVL/Bo7Rz9uurpqw6SiBCefUbCGA==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
@@ -3224,6 +3249,7 @@ packages:
     peerDependencies:
       pixi.js: '>=8.0.0-0'
 
+<<<<<<< HEAD
   pixi-live2d-display@0.5.0-beta:
     resolution: {integrity: sha512-U2G20FnhmrepYuvWB4l0CLyIH43kz1lusuX9aC05+Ed11aBQCJIBKadIJuSzKXV6sqjTiH1aBZrS/CR2aUrEBQ==}
     peerDependencies:
@@ -3232,6 +3258,8 @@ packages:
   pixi.js@7.4.3:
     resolution: {integrity: sha512-uIWdH0EI2dVgNoqN9aFaHCmR0V65OEhMkXs2sek3c/QP2ItV6UoM+ouX9esSv3ibo20F+J5D1XwnQhUZI6wqeQ==}
 
+=======
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
   pixi.js@8.15.0:
     resolution: {integrity: sha512-J/Ghze/K9fjHRlfwC2EMZ7vnMIhGo4ByKCsKMcS0AB12iT79nf9zzWKUTzMJ8QAQFqQfDOl5ULwmHMUdeih2zQ==}
 
@@ -4203,6 +4231,10 @@ packages:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
     engines: {node: '>=10'}
 
+  yaml-loader@0.9.0:
+    resolution: {integrity: sha512-N0bPfDR42qCruELfmpF6Q8XnDu1elTULGjvVn7u6rsfDa8WhlmJbjXQRh+x5TGmpOqw8R9qfiUgc3aKP+8Hd4w==}
+    engines: {node: '>= 20'}
+
   yaml@2.8.2:
     resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
     engines: {node: '>= 14.6'}
@@ -4503,6 +4535,7 @@ snapshots:
 
   '@pixi/colord@2.9.6': {}
 
+<<<<<<< HEAD
   '@pixi/compressed-textures@7.4.3(@pixi/assets@7.4.3(@pixi/core@7.4.3))(@pixi/core@7.4.3)':
     dependencies:
       '@pixi/assets': 7.4.3(@pixi/core@7.4.3)
@@ -4670,6 +4703,16 @@ snapshots:
       earcut: 2.2.4
       eventemitter3: 4.0.7
       url: 0.11.4
+=======
+  '@pixi/react@8.0.0-beta.25(@types/react@19.2.8)(pixi.js@8.15.0)(react@19.2.3)':
+    dependencies:
+      its-fine: 1.2.5(@types/react@19.2.8)(react@19.2.3)
+      pixi.js: 8.15.0
+      react: 19.2.3
+      react-reconciler: 0.31.0(react@19.2.3)
+    transitivePeerDependencies:
+      - '@types/react'
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
 
   '@pkgr/core@0.2.9': {}
 
@@ -4833,6 +4876,13 @@ snapshots:
     dependencies:
       '@types/react': 19.2.8
 
+<<<<<<< HEAD
+=======
+  '@types/react-reconciler@0.28.9(@types/react@19.2.8)':
+    dependencies:
+      '@types/react': 19.2.8
+
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
   '@types/react@19.2.8':
     dependencies:
       csstype: 3.2.3
@@ -6736,6 +6786,16 @@ snapshots:
 
   isobject@3.0.1: {}
 
+<<<<<<< HEAD
+=======
+  its-fine@1.2.5(@types/react@19.2.8)(react@19.2.3):
+    dependencies:
+      '@types/react-reconciler': 0.28.9(@types/react@19.2.8)
+      react: 19.2.3
+    transitivePeerDependencies:
+      - '@types/react'
+
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
   javascript-obfuscator@4.2.2:
     dependencies:
       '@javascript-obfuscator/escodegen': 2.3.1
@@ -6761,6 +6821,8 @@ snapshots:
       string-template: 1.0.0
       stringz: 2.1.0
       tslib: 2.8.1
+
+  javascript-stringify@2.1.0: {}
 
   jest-util@29.7.0:
     dependencies:
@@ -7419,6 +7481,7 @@ snapshots:
       '@types/gradient-parser': 0.1.5
       pixi.js: 8.15.0
 
+<<<<<<< HEAD
   pixi-live2d-display@0.5.0-beta(pixi.js@7.4.3):
     dependencies:
       pixi.js: 7.4.3
@@ -7456,6 +7519,8 @@ snapshots:
       '@pixi/text-bitmap': 7.4.3(@pixi/assets@7.4.3(@pixi/core@7.4.3))(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))(@pixi/mesh@7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3)))(@pixi/text@7.4.3(@pixi/core@7.4.3)(@pixi/sprite@7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))))
       '@pixi/text-html': 7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))(@pixi/sprite@7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3)))(@pixi/text@7.4.3(@pixi/core@7.4.3)(@pixi/sprite@7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))))
 
+=======
+>>>>>>> 5c87e143a47f2eac0521a9f7965b7f21118f88a5
   pixi.js@8.15.0:
     dependencies:
       '@pixi/colord': 2.9.6
@@ -8587,6 +8652,11 @@ snapshots:
   xml-name-validator@4.0.0: {}
 
   y18n@5.0.8: {}
+
+  yaml-loader@0.9.0:
+    dependencies:
+      javascript-stringify: 2.1.0
+      yaml: 2.8.2
 
   yaml@2.8.2: {}
 
