@@ -7,7 +7,11 @@
       "request": "launch",
       "preLaunchTask": "开始任务",
       "postDebugTask": "结束任务",
+<<<<<<< HEAD
       "url": "http://127.0.0.1:8000/",
+=======
+      "url": "http://localhost:8000",
+>>>>>>> 72a51d17062514fb40787823c97af1af514bf0f1
       "disableNetworkCache": true,
       "internalConsoleOptions": "neverOpen",
       "cwd": "${workspaceFolder}",
