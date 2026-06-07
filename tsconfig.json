@@ -4,10 +4,19 @@
     "target": "ESNext",
     "module": "ESNext",
     "outDir": "dist",
-    "baseUrl": "src",
+    "baseUrl": ".",
     "paths": {
+<<<<<<< HEAD
       "@/*": ["./*"],
       "@framework/*": ["../初始模板/CubismSdkForWeb-5-r.4/Framework/src/*"]
+=======
+      "@util/*": [
+        "./util/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+>>>>>>> b0b1703a805d03d3a4d97270fa3ebbc17a91f8b8
     },
     "moduleDetection": "auto",
     "moduleResolution": "bundler",
@@ -26,6 +35,21 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
+<<<<<<< HEAD
   "include": ["@types", "src", "*.d.ts"],
   "exclude": ["**/dist/**", "**/node_modules/**"]
+=======
+  "include": [
+    "@types",
+    "初始模板",
+    "示例",
+    "src",
+    "util",
+    "*.d.ts",
+  ],
+  "exclude": [
+    "**/dist/**",
+    "**/node_modules/**",
+  ]
+>>>>>>> b0b1703a805d03d3a4d97270fa3ebbc17a91f8b8
 }
