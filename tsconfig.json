@@ -3,11 +3,20 @@
     "types": ["jquery", "jqueryui", "lodash", "toastr", "type-fest", "yaml", "zod"],
     "target": "ESNext",
     "module": "ESNext",
+    "rootDir": ".",
     "outDir": "dist",
-    "baseUrl": "src",
     "paths": {
+<<<<<<< HEAD
       "@/*": ["./*"],
       "@framework/*": ["../初始模板/CubismSdkForWeb-5-r.4/Framework/src/*"]
+=======
+      "@util/*": [
+        "./util/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+>>>>>>> 24c09dd0d2e3a345ced6bd6449ff0c89cd686543
     },
     "moduleDetection": "auto",
     "moduleResolution": "bundler",
@@ -26,6 +35,21 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
+<<<<<<< HEAD
   "include": ["@types", "src", "*.d.ts"],
   "exclude": ["**/dist/**", "**/node_modules/**"]
+=======
+  "include": [
+    "@types",
+    "初始模板",
+    "示例",
+    "src",
+    "util",
+    "*.d.ts",
+  ],
+  "exclude": [
+    "**/dist/**",
+    "**/node_modules/**",
+  ]
+>>>>>>> 24c09dd0d2e3a345ced6bd6449ff0c89cd686543
 }
